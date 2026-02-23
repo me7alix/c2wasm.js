@@ -1,0 +1,121 @@
+<!DOCTYPE html>
+<html>
+	<head>
+		<meta charset="utf-8" />
+		<title>c2wasm demo</title>
+		<style>
+			body {
+				background: #0b0b0b;
+				color: #ddd;
+				font-family: monospace;
+				margin: 12px;
+			}
+			textarea {
+				width: 100%;
+				height: 260px;
+				background: #111;
+				color: #9f9;
+				padding: 10px;
+				border: 1px solid #222;
+				box-sizing: border-box;
+			}
+			input,
+			button {
+				background: #151515;
+				color: #ddd;
+				border: 1px solid #333;
+				padding: 6px;
+				margin: 6px 4px;
+				font-family: monospace;
+			}
+			#console {
+				background: #000;
+				padding: 10px;
+				white-space: pre-wrap;
+				min-height: 120px;
+				margin-top: 8px;
+				border: 1px solid #222;
+			}
+		</style>
+	</head>
+
+	<body>
+		<h1>C to WebAssembly compiler</h1>
+		<textarea id="editor"></textarea>
+		<div>
+			<button id="compileBtn">Compile</button>
+			<label>fn: <input id="fname" value="add" /></label>
+			<label>args: <input id="fargs" value="2,3" /></label>
+			<button id="runBtn">Run</button>
+			<button id="clearBtn">Clear</button>
+		</div>
+		<div id="console"></div>
+
+		<script src="https://cdn.jsdelivr.net/npm/wabt@1.0.39/index.min.js"></script>
+		<script src="./c2wat.js"></script>
+
+		<script>
+			(async () => {
+				const out = document.getElementById("console");
+				const log = (...a) => (out.textContent += a.join("") + "\n");
+
+				let wabt = await WabtModule();
+				let instance = null;
+
+				document.getElementById("compileBtn").addEventListener("click", async () => {
+					out.textContent = "";
+					try {
+						const code = document.getElementById("editor").value;
+						let wat = "";
+
+						try {
+							wat = c2wat(code);
+							console.log(wat);
+						} catch (e) {
+							log(e);
+							log(e.stack)
+							return;
+						}
+
+						const mod = wabt.parseWat("module.wat", wat);
+						const bin = mod.toBinary({ log: false, canonicalize_lebs: true });
+						const wasmBytes = bin.buffer;
+						const res = await WebAssembly.instantiate(wasmBytes, {});
+						instance = res.instance;
+						log("ok. exports:");
+						Object.keys(instance.exports).forEach((k) => log(" - ", k));
+					} catch (e) {
+						log("error: ", e && e.message ? e.message : String(e));
+					}
+				});
+
+				document.getElementById("runBtn").addEventListener("click", () => {
+					if (!instance) {
+						log("compile first");
+						return;
+					}
+
+					const name = document.getElementById("fname").value.trim();
+					const raw = document.getElementById("fargs").value.trim();
+					const args = raw === "" ? [] : raw.split(",").map((s) => Number(s.trim()));
+
+					try {
+						const fn = instance.exports[name];
+						if (typeof fn !== "function") {
+							log("no export: ", name);
+							return;
+						}
+
+						const r = fn(...args);
+						log("result: ", r);
+					} catch (e) {
+						log("runtime error:", e && e.message ? e.message : String(e));
+					}
+				});
+
+				document.getElementById("clearBtn").
+					addEventListener("click", () => (out.textContent = ""));
+			})();
+		</script>
+	</body>
+</html>
