@@ -380,6 +380,10 @@ const Parser = class {
 			return expr.type
 
 		case "EXPR_UN":
+			if (expr.oprd === null) {
+				this.#error(expr.line, "invalid expression")
+			}
+
 			if (expr.op === "CAST") {
 				this.#expr_calc_types(expr.oprd)
 				return expr.type
@@ -389,6 +393,10 @@ const Parser = class {
 			return expr.type
 
 		case "EXPR_BIN":
+			if (expr.lhs === null || expr.rhs === null) {
+				this.#error(expr.line, "invalid expression")
+			}
+
 			let lhst = this.#expr_calc_types(expr.lhs)
 			let rhst = this.#expr_calc_types(expr.rhs)
 
@@ -462,7 +470,7 @@ const Parser = class {
 			}
 		}
 
-		if (old_size == nodes.length) {
+		if (old_size === nodes.length) {
 			this.#error(this.#p().line, "invalid expression")
 		}
 
