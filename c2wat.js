@@ -43,8 +43,7 @@ const Lexer = class {
 				this.count++
 			} else {
 				res = this.token("EXT", "!")
-			}
-			break
+			} break
 
 		case '&':
 			if (this.#ch2() === "&") {
@@ -52,8 +51,7 @@ const Lexer = class {
 				this.count++
 			} else {
 				res = this.token("AMP", "&")
-			}
-			break
+			} break
 
 		case '|':
 			if (this.#ch2() === "|") {
@@ -61,8 +59,7 @@ const Lexer = class {
 				this.count++
 			} else {
 				res = this.token("PIPE", "|")
-			}
-			break
+			} break
 
 		case '=':
 			if (this.#ch2() === "=") {
@@ -70,8 +67,7 @@ const Lexer = class {
 				this.count++
 			} else {
 				res = this.token("EQ", "=")
-			}
-			break
+			} break
 
 		case '>':
 			if (this.#ch2() === "=") {
@@ -79,8 +75,7 @@ const Lexer = class {
 				this.count++
 			} else {
 				res = this.token("GREATER", ">")
-			}
-			break
+			} break
 
 		case '<':
 			if (this.#ch2() === "=") {
@@ -88,8 +83,7 @@ const Lexer = class {
 				this.count++
 			} else {
 				res = this.token("LESS", "<")
-			}
-			break
+			} break
 
 		case '\t':
 		case ' ':
@@ -138,8 +132,14 @@ const Lexer = class {
 					res = this.token("TP_VOID", id)
 				} else if (id === "int") {
 					res = this.token("TP_INT", id)
+				} else if (id === "break") {
+					res = this.token("LP_BREAK", id)
+				} else if (id === "continue") {
+					res = this.token("LP_CONTINUE", id)
 				} else if (id === "float") {
 					res = this.token("TP_FLOAT", id)
+				} else if (id === "extern") {
+					res = this.token("EXTERN", id)
 				} else if (id === "return") {
 					res = this.token("RET", id)
 				} else {
@@ -148,7 +148,7 @@ const Lexer = class {
 			}
 
 			else {
-				res = this.token("ERR", "wrong #character")
+				res = this.token("ERR", "invalid character")
 			}
 		}
 
@@ -191,6 +191,7 @@ const Lexer = class {
 
 const Parser = class {
 	constructor(lexer) {
+		this.externs = []
 		this.symbol_table = []
 		this.cur_func = []
 		this.var_ind = 0
@@ -208,7 +209,7 @@ const Parser = class {
 
 	#error(line, msg) {
 		let lines = this.lexer.code.split('\n')
-		throw `line ${(line + 1)}: ${msg}\n` + lines[line]
+		throw `line ${(line + 1)}: error: ${msg}\n` + lines[line]
 	}
 
 	#push_scope() {
@@ -241,7 +242,11 @@ const Parser = class {
 
 	#expect(tok, kind) {
 		if (tok.kind !== kind) {
-			this.#error(tok.line, `unexpected token \`${tok.data}\``)
+			if (tok.kind === "ERR") {
+				this.#error(tok.line, tok.data)
+			} else {
+				this.#error(tok.line, `unexpected token \`${tok.data}\``)
+			}
 		}
 	}
 
@@ -327,19 +332,35 @@ const Parser = class {
 	#pref_var(str)  { return `VAR ${str}`;  }
 
 	#parse_func_call() {
+		let count = 0
 		let _name = this.#n().data
 		let _args = []
-		let _type = this.#symbol_table_get(
+		let smbl = this.#symbol_table_get(
 			this.#p().line,
-			this.#pref_func(_name)).type
+			this.#pref_func(_name))
+		let _type = smbl.type
+		let _fargs = smbl.args
 
 		this.#expect(this.#n(), "OPAR")
 		while (this.#p().kind !== "CPAR") {
-			_args.push(this.#parse_expr(["CPAR", "COM"]))
+			let _expr = this.#parse_expr(["CPAR", "COM"])
+			_args.push(_expr)
 			this.lexer.count--
 			if (this.#p().kind === "COM")
 				this.#n()
+
+			if (count > _fargs.length - 1)
+				this.#error(_expr.line, "too many arguments")
+
+			if (_expr.type !== _fargs[count].type) {
+				this.#error(_expr.line,
+					`types mismatching, ${_expr.type} and ${_fargs[count].type}`)
+			}
+			count++
 		}
+
+		if (count < _fargs.length)
+			this.#error(expr.line, "arguments count mismatching")
 
 		this.#n()
 
@@ -419,20 +440,20 @@ const Parser = class {
 					rhs = this.#op_precedence(nodes[i+1].op, true)
 
 				if (lhs === -1 && rhs === -1)
-					this.#error(this.#p().line, "wrong combination of operators and operands")
+					this.#error(this.#p().line, "invalid combination of operators and operands")
 
 				if (lhs > rhs) {
 					if (nodes[i-1].kind === "EXPR_BIN") {
 						nodes[i-1].rhs = nodes[i]
 					} else if (nodes[i-1].kind === "EXPR_UN") {
 						nodes[i-1].oprd = nodes[i]
-					} else this.#error(this.#p().line, "wrong expression")
+					} else this.#error(this.#p().line, "invalid expression")
 				} else {
 					if (nodes[i+1].kind === "EXPR_BIN") {
 						nodes[i+1].lhs = nodes[i]
 					} else if (nodes[i+1].kind === "EXPR_UN") {
 						nodes[i+1].oprd = nodes[i]
-					} else this.#error(this.#p().line, "wrong expression")
+					} else this.#error(this.#p().line, "invalid expression")
 				}
 
 				nodes.splice(i--, 1)
@@ -440,7 +461,7 @@ const Parser = class {
 		}
 
 		if (old_size == nodes.length) {
-			this.#error(this.#p().line, "wrong expression")
+			this.#error(this.#p().line, "invalid expression")
 		}
 
 		return this.#expr_expand(nodes)
@@ -580,7 +601,7 @@ const Parser = class {
 
 			default:
 				this.#error(this.#p().line,
-					`wrong operator / operand \`${this.#p().data}\``)
+					`invalid operator / operand \`${this.#p().data}\``)
 			}
 		}
 
@@ -593,6 +614,7 @@ const Parser = class {
 	#parse_def_var() {
 		let line = this.#p().line
 		let _type = this.#parse_type()
+		this.#expect(this.#p(), "ID")
 		let _name = this.#n().data
 		let _id = `V${this.var_ind++}`
 		let _expr = null
@@ -713,6 +735,16 @@ const Parser = class {
 			else if (this.#p().kind == "ST_WHILE")
 				body.push(this.#parse_st_while())
 
+			else if (this.#p().kind == "LP_BREAK") {
+				body.push({kind: "LP_BREAK"})
+				this.#n(); this.#expect(this.#n(), "SEMI")
+			}
+
+			else if (this.#p().kind == "LP_CONTINUE") {
+				body.push({kind: "LP_CONTINUE"})
+				this.#n(); this.#expect(this.#n(), "SEMI")
+			}
+
 			else body.push(this.#parse_mut_var())
 		}
 
@@ -724,7 +756,7 @@ const Parser = class {
 		return body
 	}
 
-	#parse_def_func() {
+	#parse_def_func(is_extern) {
 		let _type = this.#parse_type()
 
 		this.#expect(this.#p(), "ID")
@@ -746,8 +778,7 @@ const Parser = class {
 					id: `V${this.var_ind++}`
 				})
 			} else {
-				this.#error(this.#p().line,
-					`comma expected, found \`${this.#p().data}\``)
+				this.#expect(this.#p(), "COM")
 			}
 		}
 
@@ -765,23 +796,38 @@ const Parser = class {
 		this.#symbol_table_add(this.#p().line, _name, {
 			kind: "FUNC",
 			type: _type,
+			args: _args,
 		})
 
-		this.#push_scope()
-
-		_args.forEach((arg) => {
-			this.#symbol_table_add(this.#p().line, arg.name, {
-				kind: "VAR",
-				type: arg.type,
-				id: arg.id,
+		if (is_extern) {
+			this.externs.push({
+				type: _type,
+				name: _name,
+				args: _args,
 			})
-		})
+		}
 
-		let _body = this.#parse_body(true)
+		if (!is_extern) {
+			this.#push_scope()
 
-		this.#pop_scope()
+			_args.forEach((arg) => {
+				this.#symbol_table_add(this.#p().line, arg.name, {
+					kind: "VAR",
+					type: arg.type,
+					id: arg.id,
+				})
+			})
 
-		func.body = _body
+			func.body = []
+			if (this.#p().kind !== "SEMI") {
+				func.body = this.#parse_body(true)
+			} else this.#n()
+
+			this.#pop_scope()
+		} else {
+			this.#expect(this.#n(), "SEMI")
+		}
+
 		return func
 	}
 
@@ -789,9 +835,12 @@ const Parser = class {
 		this.#push_scope()
 		while (this.#p().kind != "EOF") {
 			if (this.#p3().kind == "OPAR") {
-				this.prog.body.push(this.#parse_def_func())
+				this.prog.body.push(this.#parse_def_func(false))
 			} else if (this.#p2().kind == "ID") {
 				this.prog.body.push(this.#parse_def_var())
+			} else if (this.#p().kind == "EXTERN") {
+				this.#n()
+				this.#parse_def_func(true)
 			} else {
 				this.#error(this.#p().line, "invalid high level declaration")
 			}
@@ -853,14 +902,8 @@ const Codegen = class {
 			}
 
 			switch (expr.op) {
-			case "NEG":
-				this.#emit(`${type}.neg`)
-				break
-
-			case "NOT":
-				this.#emit(`i32.const 0`)
-				this.#emit(`${type}.eq`)
-				break
+			case "NEG": this.#emit(`${type}.neg`); break
+			case "NOT": this.#emit(`${type}.eqz`); break
 			}
 		} break
 
@@ -882,12 +925,32 @@ const Codegen = class {
 			case "DIV": this.#emit(`${type}.div`); break
 			case "EQ_EQ": this.#emit(`${type}.eq`); break
 			case "NOT_EQ": this.#emit(`${type}.ne`); break
-			case "LESS": this.#emit(`${type}.lt`); break
-			case "GREATER": this.#emit(`${type}.gt`); break
-			case "LESS_EQ": this.#emit(`${type}.le`); break
-			case "GREATER_EQ": this.#emit(`${type}.ge`); break
 			case "AND": this.#emit(`${type}.and`); break
 			case "OR": this.#emit(`${type}.or`); break
+
+			case "LESS":
+				switch (expr.type) {
+				case "INT":   this.#emit(`${type}.lt_s`); break
+				case "FLOAT": this.#emit(`${type}.lt`); break
+				} break
+
+			case "GREATER":
+				switch (expr.type) {
+				case "INT":   this.#emit(`${type}.gt_s`); break
+				case "FLOAT": this.#emit(`${type}.gt`); break
+				} break
+
+			case "LESS_EQ":
+				switch (expr.type) {
+				case "INT":   this.#emit(`${type}.le_s`); break
+				case "FLOAT": this.#emit(`${type}.le`); break
+				} break
+
+			case "GREATER_EQ":
+				switch (expr.type) {
+				case "INT":   this.#emit(`${type}.ge_s`); break
+				case "FLOAT": this.#emit(`${type}.ge`); break
+				} break
 			}
 		} break
 		}
@@ -914,18 +977,29 @@ const Codegen = class {
 		this.#emit("return")
 	}
 
-
 	#emit_st_while(ifst) {
-		this.#emit(`(loop \$L${this.loop_ind}`)
+		this.loop_ind++
+		this.#emit(`(block \$WO${this.loop_ind}`)
 		this.intend++
+			this.#emit(`(loop \$WI${this.loop_ind}`)
 
-		this.#emit_body(ifst.body)
+			this.intend++
+				this.#emit_expr(ifst.cond)
+				this.#emit("i32.eqz")
+				this.#emit(`br_if \$WO${this.loop_ind}`)
+				this.#emit("")
+			this.intend--
 
-		this.#emit_expr(ifst.cond)
-		this.#emit(`br_if \$L${this.loop_ind}`)
+			this.#emit_body(ifst.body)
 
+			this.intend++
+				this.#emit(`br \$WI${this.loop_ind}`)
+			this.intend--
+
+			this.#emit(")")
 		this.intend--
 		this.#emit(")")
+		this.loop_ind--
 	}
 
 	#emit_st_if(ifst) {
@@ -964,16 +1038,21 @@ const Codegen = class {
 			case "ST_IF":    this.#emit_st_if(it);       break
 			case "ST_WHILE": this.#emit_st_while(it);    break
 			case "RET":      this.#emit_func_ret(it);    break
+
+			case "LP_BREAK":
+				this.#emit(`br \$WO${this.loop_ind}`)
+				break
+
+			case "LP_CONTINUE":
+				this.#emit(`br \$WI${this.loop_ind}`)
+				break
 			}
 		})
 
 		this.intend--
 	}
 
-	#emit_def_func(func) {
-		this.#emit(`(func \$${func.name} (export "${func.name}")`)
-		this.intend++
-
+	#emit_func_sig(func) {
 		let skip = []
 		func.args.forEach((it) => {
 			skip.push(it.id)
@@ -985,6 +1064,15 @@ const Codegen = class {
 		case "FLOAT": this.#emit("(result f32)"); break
 		case "VOID":  this.#emit("(result)");     break
 		}
+
+		return skip
+	}
+
+	#emit_def_func(func) {
+		this.#emit(`(func \$${func.name} (export "${func.name}")`)
+		this.intend++
+
+		let skip = this.#emit_func_sig(func)
 
 		this.#emit("")
 		let locals = false
@@ -1006,6 +1094,14 @@ const Codegen = class {
 	emit_prog() {
 		this.#emit("(module")
 		this.intend++
+
+		this.parser.externs.forEach((it) => {
+			this.#emit(`(import "env" "${it.name}" (func \$${it.name}`)
+			this.intend++
+			this.#emit_func_sig(it)
+			this.intend--
+			this.#emit("))")
+		})
 
 		this.parser.prog.body.forEach((it) => {
 			switch (it.kind) {

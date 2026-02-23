@@ -41,11 +41,28 @@
 
 	<body>
 		<h1>C to WebAssembly compiler</h1>
-		<textarea id="editor"></textarea>
+<textarea id="editor">
+extern void print_int(int val);
+extern void print_float(float val);
+
+void fib(int n) {
+  int a = 1;
+  int b = 1;
+
+  int i = 0; while (i < n) {
+    print_int(a);
+
+    int t = b;
+    b = b + a;
+    a = t;
+
+    i = i + 1;
+  }
+}</textarea>
 		<div>
 			<button id="compileBtn">Compile</button>
-			<label>fn: <input id="fname" value="add" /></label>
-			<label>args: <input id="fargs" value="2,3" /></label>
+			<label>fn: <input id="fname" value="fib" /></label>
+			<label>args: <input id="fargs" value="10" /></label>
 			<button id="runBtn">Run</button>
 			<button id="clearBtn">Clear</button>
 		</div>
@@ -77,10 +94,21 @@
 							return;
 						}
 
+						function print_int(v) {
+							log("$ ", v)
+						}
+
+						function print_float(v) {
+							log("$ ", v)
+						}
+
 						const mod = wabt.parseWat("module.wat", wat);
 						const bin = mod.toBinary({ log: false, canonicalize_lebs: true });
 						const wasmBytes = bin.buffer;
-						const res = await WebAssembly.instantiate(wasmBytes, {});
+						const res = await WebAssembly.instantiate(wasmBytes, {
+							env: { print_int, print_float }
+						});
+
 						instance = res.instance;
 						log("ok. exports:");
 						Object.keys(instance.exports).forEach((k) => log(" - ", k));
