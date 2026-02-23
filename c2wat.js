@@ -398,6 +398,8 @@ const Parser = class {
 			}
 
 			switch (expr.op) {
+			case "OR":
+			case "AND":
 			case "EQ_EQ":
 			case "NOT_EQ":
 			case "LESS":
@@ -533,6 +535,8 @@ const Parser = class {
 				}
 			} break
 
+			case "AND":
+			case "OR":
 			case "EQ":
 			case "EQ_EQ":
 			case "NOT_EQ":
