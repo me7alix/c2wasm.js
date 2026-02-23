@@ -30,3 +30,59 @@ int add(int a, int b) {
     )
 )
 ```
+
+## Grammar
+```
+<program> ::= <declaration>* <statement>*
+
+<type> ::= "int"
+         | "float"
+         | "void"
+
+<declaration> ::= <type> <identifier> ("=" <expression>)? ";"
+
+<statement> ::= 
+      <assignment>
+    | <if-statement>
+    | <while-statement>
+    | <break-statement>
+    | <continue-statement>
+    | <compound-statement>
+
+<assignment> ::= <identifier> "=" <expression> ";"
+
+<if-statement> ::= "if" "(" <expression> ")" <statement> ("else" <statement>)?
+
+<while-statement> ::= "while" "(" <expression> ")" <statement>
+
+<break-statement> ::= "break" ";"
+
+<continue-statement> ::= "continue" ";"
+
+<compound-statement> ::= "{" <statement>* "}"
+
+<expression> ::= <equality>
+
+<equality> ::= <comparison> ( ("==" | "!=") <comparison> )*
+
+<comparison> ::= <term> ( (">" | "<" | ">=" | "<=") <term> )*
+
+<term> ::= <factor> ( ("+" | "-") <factor> )*
+
+<factor> ::= <unary> ( ("*" | "/") <unary> )*
+
+<unary> ::= ("!" | "-") <unary>
+          | <primary>
+
+<primary> ::= <identifier>
+            | <number>
+            | "(" <expression> ")"
+
+<identifier> ::= [a-zA-Z_] [a-zA-Z_0-9]*
+
+<number> ::= <int-number> | <float-number>
+
+<int-number> ::= [0-9]+
+
+<float-number> ::= [0-9]+ "." [0-9]+
+```
