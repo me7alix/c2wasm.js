@@ -112,10 +112,10 @@ const Lexer = class {
 				else           res = this.token("FLOAT", num)
 			}
 
-			else if (this.#ch().match(/[a-z_]/i)) {
+			else if (this.#ch().match(/[a-zA-Z_]/i)) {
 				let id = ""
 
-				while (this.#ch().match(/[a-z0-9_]/i)) {
+				while (this.#ch().match(/[a-zA-Z0-9_]/i)) {
 					id += this.#ch()
 					this.count++
 				}
