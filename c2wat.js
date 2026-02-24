@@ -26,16 +26,18 @@ const Lexer = class {
 		}
 
 		switch (this.#ch()) {
-		case ';': res = this.token("SEMI",  ";"); break
-		case '+': res = this.token("PLUS",  "+"); break
-		case '-': res = this.token("MINUS", "-"); break
-		case '*': res = this.token("STAR",  "*"); break
-		case '/': res = this.token("SLASH", "/"); break
-		case '{': res = this.token("OBRA",  "{"); break
-		case '}': res = this.token("CBRA",  "}"); break
-		case '(': res = this.token("OPAR",  "("); break
-		case ')': res = this.token("CPAR",  ")"); break
-		case ',': res = this.token("COM",   ","); break
+		case ';': res = this.token("SEMI",   ";"); break
+		case '+': res = this.token("PLUS",   "+"); break
+		case '-': res = this.token("MINUS",  "-"); break
+		case '*': res = this.token("STAR",   "*"); break
+		case '/': res = this.token("SLASH",  "/"); break
+		case '{': res = this.token("OBRA",   "{"); break
+		case '}': res = this.token("CBRA",   "}"); break
+		case '(': res = this.token("OPAR",   "("); break
+		case ')': res = this.token("CPAR",   ")"); break
+		case ',': res = this.token("COM",    ","); break
+		case '[': res = this.token("OSQBRA", "["); break
+		case ']': res = this.token("CSQBRA", "]"); break
 
 		case '!':
 			if (this.#ch2() === "=") {
@@ -250,28 +252,78 @@ const Parser = class {
 		}
 	}
 
-	#is_type_next() {
+	#is_type_next(need_name) {
 		let res = true
 		let line = this.lexer.line
 		let count = this.lexer.count
-		try { this.#parse_type(); }
+		try { this.#parse_type(need_name); }
 		catch (e) { res = false; }
 		this.lexer.line = line
 		this.lexer.count = count
 		return res;
 	}
 
-	#parse_type() {
-		let type = ""
-		switch (this.#p().kind) {
-		case "TP_INT":   type = "INT";   break
-		case "TP_VOID":  type = "VOID";  break
-		case "TP_FLOAT": type = "FLOAT"; break
+	#compare_types(a, b) {
+		if (a.kind !== b.kind)
+			return false
+
+		if (a.kind === "POINTER" || a.kind === "ARRAY") {
+			if (a.kind === "ARRAY") {
+				if (a.length !== b.length)
+					return false
+			}
+
+			return this.#compare_types(a.base, b.base);
+		}
+
+		return true
+	}
+
+	#parse_type(need_name) {
+		let _type = null
+		let _name = null
+		let tp = ""
+
+		switch (this.#n().kind) {
+		case "TP_INT":   tp = "INT";   break
+		case "TP_VOID":  tp = "VOID";  break
+		case "TP_FLOAT": tp = "FLOAT"; break
 		default: this.#error(this.#p().line, "no such type")
 		}
 
-		this.#n()
-		return type
+		_type = { kind: tp }
+
+		while (this.#p().kind === "STAR") {
+			this.#n()
+			_type = {
+				kind: "POINTER",
+				base: _type,
+			}
+		}
+
+		if (this.#p().kind === "ID" && need_name) {
+			_name = this.#n().data
+		}
+
+		while (this.#p().kind === "OSQBRA") {
+			this.#n()
+			let expr = this.#parse_expr(["CSQBRA"])
+			if (expr.kind !== "LIT" || expr.type.kind !== "INT") {
+				this.#error(this.#p().line, "int literal expected")
+			}
+
+			_type = {
+				kind: "ARRAY",
+				base: _type,
+				length: expr.value,
+			}
+		}
+
+		//console.log(JSON.stringify(_type, null, "    "))
+		return {
+			type: _type,
+			name: _name,
+		}
 	}
 
 	#op_precedence(kind, l) {
@@ -343,7 +395,10 @@ const Parser = class {
 
 		this.#expect(this.#n(), "OPAR")
 		while (this.#p().kind !== "CPAR") {
-			let _expr = this.#parse_expr(["CPAR", "COM"])
+			let _expr = this.#expr_num_cast(
+				this.#parse_expr(["CPAR", "COM"]),
+				_fargs[count].type)
+
 			_args.push(_expr)
 			this.lexer.count--
 			if (this.#p().kind === "COM")
@@ -352,15 +407,14 @@ const Parser = class {
 			if (count > _fargs.length - 1)
 				this.#error(_expr.line, "too many arguments")
 
-			if (_expr.type !== _fargs[count].type) {
-				this.#error(_expr.line,
-					`types mismatching, ${_expr.type} and ${_fargs[count].type}`)
-			}
+			if (!this.#compare_types(_expr.type, _fargs[count].type))
+				this.#error(_expr.line, "types mismatching")
+
 			count++
 		}
 
 		if (count < _fargs.length)
-			this.#error(expr.line, "arguments count mismatching")
+			this.#error(expr.line, "not enough arguments")
 
 		this.#n()
 
@@ -370,6 +424,19 @@ const Parser = class {
 			name: _name,
 			args: _args,
 		}
+	}
+
+	#expr_num_cast(num, type) {
+		if (type.kind === "FLOAT" && num.type.kind === "INT") {
+			return {
+				kind: "EXPR_UN",
+				op: "CAST",
+				type: { kind: "FLOAT" },
+				oprd: num,
+			}
+		}
+
+		return num
 	}
 
 	#expr_calc_types(expr) {
@@ -399,25 +466,33 @@ const Parser = class {
 
 			let lhst = this.#expr_calc_types(expr.lhs)
 			let rhst = this.#expr_calc_types(expr.rhs)
+			expr.type = lhst
 
-			if (lhst !== rhst) {
-				this.#error(expr.line,
-					`types mismatching, ${lhst} and ${rhst}`)
+			if ((lhst.kind === "FLOAT" && rhst.kind === "INT") ||
+				(rhst.kind === "FLOAT" && lhst.kind === "INT")) {
+				let lhsti = lhst.kind === "INT"
+				if (lhsti) expr.lhs = this.#expr_num_cast(expr.lhs, rhst)
+				else       expr.rhs = this.#expr_num_cast(expr.rhs, lhst)
+				expr.type = { kind: "FLOAT" }
+			} else if ((lhst.kind === "ARRAY" && rhst.kind === "INT") ||
+				((rhst.kind === "ARRAY" && lhst.kind === "INT")) ||
+				(lhst.kind === "POINTER" && rhst.kind === "INT") ||
+				((rhst.kind === "POINTER" && lhst.kind === "INT")) ) {
+				if (expr.op !== "ADD" || expr.op !== "SUB") {
+					this.#error(expr.line, "invalid operation")
+				}
+			} else if (!this.#compare_types(lhst, rhst)) {
+				this.#error(expr.line, "types mismatching")
 			}
 
 			switch (expr.op) {
-			case "OR":
-			case "AND":
-			case "EQ_EQ":
-			case "NOT_EQ":
-			case "LESS":
-			case "GREATER":
-			case "LESS_EQ":
-			case "GREATER_EQ":
-				expr.type = "INT"
+			case "OR": case "AND":
+			case "EQ_EQ": case "NOT_EQ":
+			case "LESS": case "GREATER":
+			case "LESS_EQ": case "GREATER_EQ":
+				expr.type = { kind: "INT" }
 			}
 
-			expr.type = lhst
 			return expr.type
 		}
 	}
@@ -489,7 +564,7 @@ const Parser = class {
 				nodes.push({
 					kind: "LIT",
 					line: this.#p().line,
-					type: "INT",
+					type: { kind: "INT" },
 					lit: "INT",
 					value: this.#n().data,
 				})
@@ -499,7 +574,7 @@ const Parser = class {
 				nodes.push({
 					kind: "LIT",
 					line: this.#p().line,
-					type: "FLOAT",
+					type: { kind: "FLOAT" },
 					lit: "FLOAT",
 					value: this.#n().data,
 				})
@@ -507,9 +582,9 @@ const Parser = class {
 
 			case "OPAR":
 				this.#n()
-				if (this.#is_type_next()) {
+				if (this.#is_type_next(false)) {
 					let _line = this.#p().line
-					let _type = this.#parse_type()
+					let _type = this.#parse_type(false).type
 
 					nodes.push({
 						kind: "EXPR_UN",
@@ -625,22 +700,21 @@ const Parser = class {
 
 	#parse_def_var() {
 		let line = this.#p().line
-		let _type = this.#parse_type()
-		this.#expect(this.#p(), "ID")
-		let _name = this.#n().data
+
+		let tan = this.#parse_type(true)
+		let _type = tan.type
+		let _name = tan.name
+
 		let _id = `V${this.var_ind++}`
 		let _expr = null
 
 		if (this.#p().kind === "EQ") {
 			this.#n()
-			_expr = this.#parse_expr(["SEMI"])
+			_expr = this.#expr_num_cast(this.#parse_expr(["SEMI"]), _type)
+			if (!this.#compare_types(_type, _expr.type))
+				this.#error(line, "types mismatching")
 		} else {
 			this.#expect(this.#n(), "SEMI")
-		}
-
-		if (_type !== _expr.type) {
-			this.#error(line,
-				`types mismatching, ${_type} and ${_expr.type}`)
 		}
 
 		this.#symbol_table_add(line, _name, {
@@ -668,13 +742,13 @@ const Parser = class {
 
 		let _expr = null
 		if (this.#p().kind !== "SEMI") {
-			_expr = this.#parse_expr(["SEMI"])
+			_expr = this.#expr_num_cast(
+				this.#parse_expr(["SEMI"]),
+				this.cur_func.type)
 		}
 
-		if (this.cur_func.type !== _expr.type) {
-			this.#error(line,
-				`types mismatching, ${this.cur_func.type} and ${_expr.type}`)
-		}
+		if (!this.#compare_types(this.cur_func.type, _expr.type))
+			this.#error(line, "types mismatching")
 
 		return {
 			kind: "RET",
@@ -735,7 +809,7 @@ const Parser = class {
 			this.#push_scope()
 
 		while (this.#p().kind !== "CBRA") {
-			if (this.#is_type_next())
+			if (this.#is_type_next(true))
 				body.push(this.#parse_def_var())
 
 			else if (this.#p().kind === "RET")
@@ -769,7 +843,7 @@ const Parser = class {
 	}
 
 	#parse_def_func(is_extern) {
-		let _type = this.#parse_type()
+		let _type = this.#parse_type(false).type
 
 		this.#expect(this.#p(), "ID")
 		let _name = this.#n().data
@@ -781,7 +855,7 @@ const Parser = class {
 			if (this.#p().kind == "COM") {
 				this.#n()
 			} else if (this.#p2().kind == "ID") {
-				let _type = this.#parse_type()
+				let _type = this.#parse_type(false).type
 				this.#expect(this.#p(), "ID")
 				let _name = this.#n().data
 				_args.push({
@@ -864,9 +938,10 @@ const Parser = class {
 
 const Codegen = class {
 	constructor(parser) {
+		this.code = ""
 		this.loop_ind = 0
 		this.intend = 0
-		this.code = ""
+		this.cur_func = null
 		this.parser = parser
 	}
 
@@ -876,17 +951,19 @@ const Codegen = class {
 		this.code += text + "\n"
 	}
 
-	#get_type(type) {
-		switch (type) {
-		case "INT":   return "i32"
-		case "FLOAT": return "f32"
+	#wat_type(type) {
+		switch (type.kind) {
+		case "POINTER": return "i32"
+		case "ARRAY":   return "i32"
+		case "INT":     return "i32"
+		case "FLOAT":   return "f32"
 		}
 	}
 
 	#emit_expr(expr) {
 		switch (expr.kind) {
 		case "LIT":
-			this.#emit(`${this.#get_type(expr.type)}.const ${expr.value}`)
+			this.#emit(`${this.#wat_type(expr.type)}.const ${expr.value}`)
 			break
 
 		case "CALL_FUNC":
@@ -903,10 +980,11 @@ const Codegen = class {
 
 		case "EXPR_UN": {
 			this.#emit_expr(expr.oprd)
-			let type = this.#get_type(expr.type)
+			console.log(expr)
+			let type = this.#wat_type(expr.type)
 
 			if (expr.op === "CAST") {
-				switch (expr.oprd.type) {
+				switch (expr.oprd.type.kind) {
 					case "INT":   this.#emit(`${type}.convert_i32_s`); break
 					case "FLOAT": this.#emit(`${type}.trunc_f32_s`);   break
 				}
@@ -929,7 +1007,7 @@ const Codegen = class {
 			this.#emit_expr(expr.lhs)
 			this.#emit_expr(expr.rhs)
 
-			let type = this.#get_type(expr.type)
+			let type = this.#wat_type(expr.type)
 			switch (expr.op) {
 			case "ADD": this.#emit(`${type}.add`); break
 			case "SUB": this.#emit(`${type}.sub`); break
@@ -941,25 +1019,25 @@ const Codegen = class {
 			case "OR": this.#emit(`${type}.or`); break
 
 			case "LESS":
-				switch (expr.type) {
+				switch (expr.type.kind) {
 				case "INT":   this.#emit(`${type}.lt_s`); break
 				case "FLOAT": this.#emit(`${type}.lt`); break
 				} break
 
 			case "GREATER":
-				switch (expr.type) {
+				switch (expr.type.kind) {
 				case "INT":   this.#emit(`${type}.gt_s`); break
 				case "FLOAT": this.#emit(`${type}.gt`); break
 				} break
 
 			case "LESS_EQ":
-				switch (expr.type) {
+				switch (expr.type.kind) {
 				case "INT":   this.#emit(`${type}.le_s`); break
 				case "FLOAT": this.#emit(`${type}.le`); break
 				} break
 
 			case "GREATER_EQ":
-				switch (expr.type) {
+				switch (expr.type.kind) {
 				case "INT":   this.#emit(`${type}.ge_s`); break
 				case "FLOAT": this.#emit(`${type}.ge`); break
 				} break
@@ -969,7 +1047,7 @@ const Codegen = class {
 	}
 
 	#emit_def_var(vd) {
-		this.#emit(`(local \$${vd.id} ${this.#get_type(vd.type)})`);
+		this.#emit(`(local \$${vd.id} ${this.#wat_type(vd.type)})`);
 	}
 
 	#emit_def_var_val(vd) {
@@ -989,20 +1067,20 @@ const Codegen = class {
 		this.#emit("return")
 	}
 
-	#emit_st_while(ifst) {
+	#emit_st_while(wst) {
 		this.loop_ind++
 		this.#emit(`(block \$WO${this.loop_ind}`)
 		this.intend++
 			this.#emit(`(loop \$WI${this.loop_ind}`)
 
 			this.intend++
-				this.#emit_expr(ifst.cond)
+				this.#emit_expr(wst.cond)
 				this.#emit("i32.eqz")
 				this.#emit(`br_if \$WO${this.loop_ind}`)
 				this.#emit("")
 			this.intend--
 
-			this.#emit_body(ifst.body)
+			this.#emit_body(wst.body)
 
 			this.intend++
 				this.#emit(`br \$WI${this.loop_ind}`)
@@ -1068,10 +1146,10 @@ const Codegen = class {
 		let skip = []
 		func.args.forEach((it) => {
 			skip.push(it.id)
-			this.#emit(`(param \$${it.id} ${this.#get_type(it.type)})`)
+			this.#emit(`(param \$${it.id} ${this.#wat_type(it.type)})`)
 		})
 
-		switch (func.type) {
+		switch (func.type.kind) {
 		case "INT":   this.#emit("(result i32)"); break
 		case "FLOAT": this.#emit("(result f32)"); break
 		case "VOID":  this.#emit("(result)");     break
