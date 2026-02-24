@@ -7,8 +7,8 @@ const Lexer = class {
 		this.line = 0
 	}
 
-	#ch()  { return this.code[this.count] + "";     }
-	#ch2() { return this.code[this.count + 1] + ""; }
+	ch()  { return this.code[this.count] + "";     }
+	ch2() { return this.code[this.count + 1] + ""; }
 
 	token(_kind, _data) {
 		return {
@@ -25,7 +25,7 @@ const Lexer = class {
 			return this.token("EOF", "")
 		}
 
-		switch (this.#ch()) {
+		switch (this.ch()) {
 		case ';': res = this.token("SEMI",   ";"); break
 		case '+': res = this.token("PLUS",   "+"); break
 		case '-': res = this.token("MINUS",  "-"); break
@@ -40,7 +40,7 @@ const Lexer = class {
 		case ']': res = this.token("CSQBRA", "]"); break
 
 		case '!':
-			if (this.#ch2() === "=") {
+			if (this.ch2() === "=") {
 				res = this.token("NOT_EQ", "!=")
 				this.count++
 			} else {
@@ -48,7 +48,7 @@ const Lexer = class {
 			} break
 
 		case '&':
-			if (this.#ch2() === "&") {
+			if (this.ch2() === "&") {
 				res = this.token("AND", "&&")
 				this.count++
 			} else {
@@ -56,7 +56,7 @@ const Lexer = class {
 			} break
 
 		case '|':
-			if (this.#ch2() === "|") {
+			if (this.ch2() === "|") {
 				res = this.token("OR", "||")
 				this.count++
 			} else {
@@ -64,7 +64,7 @@ const Lexer = class {
 			} break
 
 		case '=':
-			if (this.#ch2() === "=") {
+			if (this.ch2() === "=") {
 				res = this.token("EQ_EQ", "==")
 				this.count++
 			} else {
@@ -72,7 +72,7 @@ const Lexer = class {
 			} break
 
 		case '>':
-			if (this.#ch2() === "=") {
+			if (this.ch2() === "=") {
 				res = this.token("GREATER_EQ", ">=")
 				this.count++
 			} else {
@@ -80,7 +80,7 @@ const Lexer = class {
 			} break
 
 		case '<':
-			if (this.#ch2() === "=") {
+			if (this.ch2() === "=") {
 				res = this.token("LESS_EQ", "<=")
 				this.count++
 			} else {
@@ -98,13 +98,13 @@ const Lexer = class {
 			return this.next()
 
 		default:
-			if (this.#ch().match(/[0-9]/i)) {
+			if (this.ch().match(/[0-9]/i)) {
 				let num = ""
 				let is_float = false
 
-				while (this.#ch().match(/[0-9\.]/i)) {
-					num += this.#ch()
-					if (this.#ch() === '.')
+				while (this.ch().match(/[0-9\.]/i)) {
+					num += this.ch()
+					if (this.ch() === '.')
 						is_float = true
 					this.count++
 				}
@@ -114,11 +114,11 @@ const Lexer = class {
 				else           res = this.token("FLOAT", num)
 			}
 
-			else if (this.#ch().match(/[a-zA-Z_]/i)) {
+			else if (this.ch().match(/[a-zA-Z_]/i)) {
 				let id = ""
 
-				while (this.#ch().match(/[a-zA-Z0-9_]/i)) {
-					id += this.#ch()
+				while (this.ch().match(/[a-zA-Z0-9_]/i)) {
+					id += this.ch()
 					this.count++
 				}
 
@@ -204,27 +204,27 @@ const Parser = class {
 		}
 	}
 
-	#n()  { return this.lexer.next();  }
-	#p()  { return this.lexer.peek();  }
-	#p2() { return this.lexer.peek2(); }
-	#p3() { return this.lexer.peek3(); }
+	n()  { return this.lexer.next();  }
+	p()  { return this.lexer.peek();  }
+	p2() { return this.lexer.peek2(); }
+	p3() { return this.lexer.peek3(); }
 
-	#error(line, msg) {
+	error(line, msg) {
 		let lines = this.lexer.code.split('\n')
 		throw `line ${(line + 1)}: error: ${msg}\n` + lines[line]
 	}
 
-	#push_scope() {
+	push_scope() {
 		this.symbol_table.push(new Map())
 	}
 
-	#pop_scope() {
+	pop_scope() {
 		this.symbol_table.pop()
 	}
 
-	#symbol_table_add(line, key, symbol) {
+	symbol_table_add(line, key, symbol) {
 		if (this.symbol_table.at(-1).has(key)) {
-			this.#error(line, `redifinition of the symbol \`${key}\``)
+			this.error(line, `redifinition of the symbol \`${key}\``)
 		}
 
 		this.symbol_table.at(-1).set(`${symbol.kind} ${key}`, symbol)
@@ -232,38 +232,38 @@ const Parser = class {
 			this.cur_func.vars.push(symbol)
 	}
 
-	#symbol_table_get(line, key) {
+	symbol_table_get(line, key) {
 		for (let i = this.symbol_table.length - 1; i >= 0; i--) {
 			if (this.symbol_table[i].has(key)) {
 				return this.symbol_table[i].get(key)
 			}
 		}
 
-		this.#error(line, `no such symbol \`${key}\``)
+		this.error(line, `no such symbol \`${key}\``)
 	}
 
-	#expect(tok, kind) {
+	expect(tok, kind) {
 		if (tok.kind !== kind) {
 			if (tok.kind === "ERR") {
-				this.#error(tok.line, tok.data)
+				this.error(tok.line, tok.data)
 			} else {
-				this.#error(tok.line, `unexpected token \`${tok.data}\``)
+				this.error(tok.line, `unexpected token \`${tok.data}\``)
 			}
 		}
 	}
 
-	#is_type_next(need_name) {
+	is_type_next(need_name) {
 		let res = true
 		let line = this.lexer.line
 		let count = this.lexer.count
-		try { this.#parse_type(need_name); }
+		try { this.parse_type(need_name); }
 		catch (e) { res = false; }
 		this.lexer.line = line
 		this.lexer.count = count
 		return res;
 	}
 
-	#compare_types(a, b) {
+	compare_types(a, b) {
 		if (a.kind !== b.kind)
 			return false
 
@@ -273,43 +273,43 @@ const Parser = class {
 					return false
 			}
 
-			return this.#compare_types(a.base, b.base);
+			return this.compare_types(a.base, b.base);
 		}
 
 		return true
 	}
 
-	#parse_type(need_name) {
+	parse_type(need_name) {
 		let _type = null
 		let _name = null
 		let tp = ""
 
-		switch (this.#n().kind) {
+		switch (this.n().kind) {
 		case "TP_INT":   tp = "INT";   break
 		case "TP_VOID":  tp = "VOID";  break
 		case "TP_FLOAT": tp = "FLOAT"; break
-		default: this.#error(this.#p().line, "no such type")
+		default: this.error(this.p().line, "no such type")
 		}
 
 		_type = { kind: tp }
 
-		while (this.#p().kind === "STAR") {
-			this.#n()
+		while (this.p().kind === "STAR") {
+			this.n()
 			_type = {
 				kind: "POINTER",
 				base: _type,
 			}
 		}
 
-		if (this.#p().kind === "ID" && need_name) {
-			_name = this.#n().data
+		if (this.p().kind === "ID" && need_name) {
+			_name = this.n().data
 		}
 
-		while (this.#p().kind === "OSQBRA") {
-			this.#n()
-			let expr = this.#parse_expr(["CSQBRA"])
+		while (this.p().kind === "OSQBRA") {
+			this.n()
+			let expr = this.parse_expr(["CSQBRA"])
 			if (expr.kind !== "LIT" || expr.type.kind !== "INT") {
-				this.#error(this.#p().line, "int literal expected")
+				this.error(this.p().line, "int literal expected")
 			}
 
 			_type = {
@@ -319,14 +319,13 @@ const Parser = class {
 			}
 		}
 
-		//console.log(JSON.stringify(_type, null, "    "))
 		return {
 			type: _type,
 			name: _name,
 		}
 	}
 
-	#op_precedence(kind, l) {
+	op_precedence(kind, l) {
 		switch (kind) {
 		case "EQ":
 			return l ? 1 : 2
@@ -353,7 +352,7 @@ const Parser = class {
 		}
 	}
 
-	#tok_to_un_op(tok) {
+	tok_to_un_op(tok) {
 		switch (tok.kind) {
 		case "AMP":   return "REF"
 		case "STAR":  return "DEREF"
@@ -362,7 +361,7 @@ const Parser = class {
 		}
 	}
 
-	#tok_to_bin_op(tok) {
+	tok_to_bin_op(tok) {
 		switch (tok.kind) {
 		case "PLUS":       return "ADD"
 		case "MINUS":      return "SUB"
@@ -380,43 +379,43 @@ const Parser = class {
 		}
 	}
 
-	#pref_func(str) { return `FUNC ${str}`; }
-	#pref_var(str)  { return `VAR ${str}`;  }
+	pref_func(str) { return `FUNC ${str}`; }
+	pref_var(str)  { return `VAR ${str}`;  }
 
-	#parse_func_call() {
+	parse_func_call() {
 		let count = 0
-		let _name = this.#n().data
+		let _name = this.n().data
 		let _args = []
-		let smbl = this.#symbol_table_get(
-			this.#p().line,
-			this.#pref_func(_name))
+		let smbl = this.symbol_table_get(
+			this.p().line,
+			this.pref_func(_name))
 		let _type = smbl.type
 		let _fargs = smbl.args
 
-		this.#expect(this.#n(), "OPAR")
-		while (this.#p().kind !== "CPAR") {
-			let _expr = this.#expr_num_cast(
-				this.#parse_expr(["CPAR", "COM"]),
+		this.expect(this.n(), "OPAR")
+		while (this.p().kind !== "CPAR") {
+			let _expr = this.expr_num_cast(
+				this.parse_expr(["CPAR", "COM"]),
 				_fargs[count].type)
 
 			_args.push(_expr)
 			this.lexer.count--
-			if (this.#p().kind === "COM")
-				this.#n()
+			if (this.p().kind === "COM")
+				this.n()
 
 			if (count > _fargs.length - 1)
-				this.#error(_expr.line, "too many arguments")
+				this.error(_expr.line, "too many arguments")
 
-			if (!this.#compare_types(_expr.type, _fargs[count].type))
-				this.#error(_expr.line, "types mismatching")
+			if (!this.compare_types(_expr.type, _fargs[count].type))
+				this.error(_expr.line, "types mismatching")
 
 			count++
 		}
 
 		if (count < _fargs.length)
-			this.#error(expr.line, "not enough arguments")
+			this.error(expr.line, "not enough arguments")
 
-		this.#n()
+		this.n()
 
 		return {
 			kind: "CALL_FUNC",
@@ -426,7 +425,7 @@ const Parser = class {
 		}
 	}
 
-	#expr_num_cast(num, type) {
+	expr_num_cast(num, type) {
 		if (type.kind === "FLOAT" && num.type.kind === "INT") {
 			return {
 				kind: "EXPR_UN",
@@ -439,7 +438,7 @@ const Parser = class {
 		return num
 	}
 
-	#expr_calc_types(expr) {
+	expr_calc_types(expr) {
 		switch (expr.kind) {
 		case "VAR":
 		case "LIT":
@@ -448,41 +447,41 @@ const Parser = class {
 
 		case "EXPR_UN":
 			if (expr.oprd === null) {
-				this.#error(expr.line, "invalid expression")
+				this.error(expr.line, "invalid expression")
 			}
 
 			if (expr.op === "CAST") {
-				this.#expr_calc_types(expr.oprd)
+				this.expr_calc_types(expr.oprd)
 				return expr.type
 			}
 
-			expr.type = this.#expr_calc_types(expr.oprd)
+			expr.type = this.expr_calc_types(expr.oprd)
 			return expr.type
 
 		case "EXPR_BIN":
 			if (expr.lhs === null || expr.rhs === null) {
-				this.#error(expr.line, "invalid expression")
+				this.error(expr.line, "invalid expression")
 			}
 
-			let lhst = this.#expr_calc_types(expr.lhs)
-			let rhst = this.#expr_calc_types(expr.rhs)
+			let lhst = this.expr_calc_types(expr.lhs)
+			let rhst = this.expr_calc_types(expr.rhs)
 			expr.type = lhst
 
 			if ((lhst.kind === "FLOAT" && rhst.kind === "INT") ||
 				(rhst.kind === "FLOAT" && lhst.kind === "INT")) {
 				let lhsti = lhst.kind === "INT"
-				if (lhsti) expr.lhs = this.#expr_num_cast(expr.lhs, rhst)
-				else       expr.rhs = this.#expr_num_cast(expr.rhs, lhst)
+				if (lhsti) expr.lhs = this.expr_num_cast(expr.lhs, rhst)
+				else       expr.rhs = this.expr_num_cast(expr.rhs, lhst)
 				expr.type = { kind: "FLOAT" }
 			} else if ((lhst.kind === "ARRAY" && rhst.kind === "INT") ||
 				((rhst.kind === "ARRAY" && lhst.kind === "INT")) ||
 				(lhst.kind === "POINTER" && rhst.kind === "INT") ||
 				((rhst.kind === "POINTER" && lhst.kind === "INT")) ) {
 				if (expr.op !== "ADD" || expr.op !== "SUB") {
-					this.#error(expr.line, "invalid operation")
+					this.error(expr.line, "invalid operation")
 				}
-			} else if (!this.#compare_types(lhst, rhst)) {
-				this.#error(expr.line, "types mismatching")
+			} else if (!this.compare_types(lhst, rhst)) {
+				this.error(expr.line, "types mismatching")
 			}
 
 			switch (expr.op) {
@@ -497,7 +496,7 @@ const Parser = class {
 		}
 	}
 
-	#expr_expand(nodes) {
+	expr_expand(nodes) {
 		let old_size = nodes.length
 
 		for (let i = 0; i < nodes.length; i++) {
@@ -519,26 +518,26 @@ const Parser = class {
 				let rhs = -1
 
 				if (i > 0)
-					lhs = this.#op_precedence(nodes[i-1].op, false)
+					lhs = this.op_precedence(nodes[i-1].op, false)
 
 				if (i < nodes.length - 1)
-					rhs = this.#op_precedence(nodes[i+1].op, true)
+					rhs = this.op_precedence(nodes[i+1].op, true)
 
 				if (lhs === -1 && rhs === -1)
-					this.#error(this.#p().line, "invalid combination of operators and operands")
+					this.error(this.p().line, "invalid combination of operators and operands")
 
 				if (lhs > rhs) {
 					if (nodes[i-1].kind === "EXPR_BIN") {
 						nodes[i-1].rhs = nodes[i]
 					} else if (nodes[i-1].kind === "EXPR_UN") {
 						nodes[i-1].oprd = nodes[i]
-					} else this.#error(this.#p().line, "invalid expression")
+					} else this.error(this.p().line, "invalid expression")
 				} else {
 					if (nodes[i+1].kind === "EXPR_BIN") {
 						nodes[i+1].lhs = nodes[i]
 					} else if (nodes[i+1].kind === "EXPR_UN") {
 						nodes[i+1].oprd = nodes[i]
-					} else this.#error(this.#p().line, "invalid expression")
+					} else this.error(this.p().line, "invalid expression")
 				}
 
 				nodes.splice(i--, 1)
@@ -546,45 +545,45 @@ const Parser = class {
 		}
 
 		if (old_size === nodes.length) {
-			this.#error(this.#p().line, "invalid expression")
+			this.error(this.p().line, "invalid expression")
 		}
 
-		return this.#expr_expand(nodes)
+		return this.expr_expand(nodes)
 	}
 
-	#parse_expr(until) {
+	parse_expr(until) {
 		let nodes = []
 		loop: while (true) {
 			for (let i = 0; i < until.length; i++) {
-				if (until[i] === this.#p().kind) break loop
+				if (until[i] === this.p().kind) break loop
 			}
 
-			switch (this.#p().kind) {
+			switch (this.p().kind) {
 			case "INT": {
 				nodes.push({
 					kind: "LIT",
-					line: this.#p().line,
+					line: this.p().line,
 					type: { kind: "INT" },
 					lit: "INT",
-					value: this.#n().data,
+					value: this.n().data,
 				})
 			} break
 
 			case "FLOAT": {
 				nodes.push({
 					kind: "LIT",
-					line: this.#p().line,
+					line: this.p().line,
 					type: { kind: "FLOAT" },
 					lit: "FLOAT",
-					value: this.#n().data,
+					value: this.n().data,
 				})
 			} break
 
 			case "OPAR":
-				this.#n()
-				if (this.#is_type_next(false)) {
-					let _line = this.#p().line
-					let _type = this.#parse_type(false).type
+				this.n()
+				if (this.is_type_next(false)) {
+					let _line = this.p().line
+					let _type = this.parse_type(false).type
 
 					nodes.push({
 						kind: "EXPR_UN",
@@ -594,27 +593,27 @@ const Parser = class {
 						oprd: null,
 					})
 
-					this.#expect(this.#n(), "CPAR")
+					this.expect(this.n(), "CPAR")
 				} else {
-					nodes.push(this.#parse_expr(["CPAR"]))
+					nodes.push(this.parse_expr(["CPAR"]))
 				}
 				break
 
 			case "ID": {
-				if (this.#p2().kind != "OPAR") {
-					let smbl = this.#symbol_table_get(
-						this.#p().line,
-						this.#pref_var(this.#p().data))
+				if (this.p2().kind != "OPAR") {
+					let smbl = this.symbol_table_get(
+						this.p().line,
+						this.pref_var(this.p().data))
 
 					nodes.push({
 						kind: "VAR",
-						line: this.#p().line,
+						line: this.p().line,
 						type: smbl.type,
 						id: smbl.id,
-						name: this.#n().data
+						name: this.n().data
 					})
 				} else {
-					nodes.push(this.#parse_func_call())
+					nodes.push(this.parse_func_call())
 				}
 			} break
 
@@ -631,8 +630,8 @@ const Parser = class {
 			case "PLUS": {
 				nodes.push({
 					kind: "EXPR_BIN",
-					line: this.#p().line,
-					op: this.#tok_to_bin_op(this.#n()),
+					line: this.p().line,
+					op: this.tok_to_bin_op(this.n()),
 					type: "",
 					lhs: null, rhs: null,
 				})
@@ -641,8 +640,8 @@ const Parser = class {
 			case "EXT": {
 				nodes.push({
 					kind: "EXPR_UN",
-					line: this.#p().line,
-					op: this.#tok_to_un_op(this.#n()),
+					line: this.p().line,
+					op: this.tok_to_un_op(this.n()),
 					type: "",
 					oprd: null,
 				})
@@ -651,7 +650,7 @@ const Parser = class {
 			case "AMP":
 			case "STAR":
 			case "MINUS": {
-				let op = this.#p().kind
+				let op = this.p().kind
 				let is_unary_op = false
 
 				if (nodes.length === 0) {
@@ -670,16 +669,16 @@ const Parser = class {
 				if (is_unary_op) {
 					nodes.push({
 						kind: "EXPR_UN",
-						line: this.#p().line,
-						op: this.#tok_to_un_op(this.#n()),
+						line: this.p().line,
+						op: this.tok_to_un_op(this.n()),
 						type: "",
 						oprd: null
 					})
 				} else {
 					nodes.push({
 						kind: "EXPR_BIN",
-						line: this.#p().line,
-						op: this.#tok_to_bin_op(this.#n()),
+						line: this.p().line,
+						op: this.tok_to_bin_op(this.n()),
 						type: "",
 						lhs: null, rhs: null,
 					})
@@ -687,37 +686,37 @@ const Parser = class {
 			} break
 
 			default:
-				this.#error(this.#p().line,
-					`invalid operator / operand \`${this.#p().data}\``)
+				this.error(this.p().line,
+					`invalid operator / operand \`${this.p().data}\``)
 			}
 		}
 
-		this.#n()
-		let expr = this.#expr_expand(nodes)
-		this.#expr_calc_types(expr)
+		this.n()
+		let expr = this.expr_expand(nodes)
+		this.expr_calc_types(expr)
 		return expr
 	}
 
-	#parse_def_var() {
-		let line = this.#p().line
+	parse_def_var() {
+		let line = this.p().line
 
-		let tan = this.#parse_type(true)
+		let tan = this.parse_type(true)
 		let _type = tan.type
 		let _name = tan.name
 
 		let _id = `V${this.var_ind++}`
 		let _expr = null
 
-		if (this.#p().kind === "EQ") {
-			this.#n()
-			_expr = this.#expr_num_cast(this.#parse_expr(["SEMI"]), _type)
-			if (!this.#compare_types(_type, _expr.type))
-				this.#error(line, "types mismatching")
+		if (this.p().kind === "EQ") {
+			this.n()
+			_expr = this.expr_num_cast(this.parse_expr(["SEMI"]), _type)
+			if (!this.compare_types(_type, _expr.type))
+				this.error(line, "types mismatching")
 		} else {
-			this.#expect(this.#n(), "SEMI")
+			this.expect(this.n(), "SEMI")
 		}
 
-		this.#symbol_table_add(line, _name, {
+		this.symbol_table_add(line, _name, {
 			kind: "VAR", type: _type, id: _id,
 		})
 
@@ -730,25 +729,25 @@ const Parser = class {
 		}
 	}
 
-	#parse_mut_var() {
+	parse_mut_var() {
 		return {
 			kind: "MUT_VAR",
-			expr: this.#parse_expr(["SEMI"]),
+			expr: this.parse_expr(["SEMI"]),
 		}
 	}
 
-	#parse_func_ret() {
-		let line = this.#n().line
+	parse_func_ret() {
+		let line = this.n().line
 
 		let _expr = null
-		if (this.#p().kind !== "SEMI") {
-			_expr = this.#expr_num_cast(
-				this.#parse_expr(["SEMI"]),
+		if (this.p().kind !== "SEMI") {
+			_expr = this.expr_num_cast(
+				this.parse_expr(["SEMI"]),
 				this.cur_func.type)
 		}
 
-		if (!this.#compare_types(this.cur_func.type, _expr.type))
-			this.#error(line, "types mismatching")
+		if (!this.compare_types(this.cur_func.type, _expr.type))
+			this.error(line, "types mismatching")
 
 		return {
 			kind: "RET",
@@ -757,12 +756,12 @@ const Parser = class {
 		}
 	}
 
-	#parse_st_if() {
-		this.#n()
+	parse_st_if() {
+		this.n()
 
-		this.#expect(this.#n(), "OPAR")
-		let _cond = this.#parse_expr(["CPAR"])
-		let _body = this.#parse_body(false)
+		this.expect(this.n(), "OPAR")
+		let _cond = this.parse_expr(["CPAR"])
+		let _body = this.parse_body(false)
 
 		let if_st = {
 			kind: "ST_IF",
@@ -771,15 +770,15 @@ const Parser = class {
 			next: null,
 		}
 
-		if (this.#p().kind === "ST_ELSE") {
-			if (this.#p2().kind == "ST_IF") {
-				this.#n();
-				if_st.next = this.#parse_st_if()
+		if (this.p().kind === "ST_ELSE") {
+			if (this.p2().kind == "ST_IF") {
+				this.n();
+				if_st.next = this.parse_st_if()
 			} else {
-				this.#n();
+				this.n();
 				if_st.next = {
 					kind: "ST_ELSE",
-					body: this.#parse_body(false),
+					body: this.parse_body(false),
 				}
 			}
 		}
@@ -787,12 +786,12 @@ const Parser = class {
 		return if_st
 	}
 
-	#parse_st_while() {
-		this.#n()
+	parse_st_while() {
+		this.n()
 
-		this.#expect(this.#n(), "OPAR")
-		let _cond = this.#parse_expr(["CPAR"])
-		let _body = this.#parse_body(false)
+		this.expect(this.n(), "OPAR")
+		let _cond = this.parse_expr(["CPAR"])
+		let _body = this.parse_body(false)
 
 		return {
 			kind: "ST_WHILE",
@@ -801,74 +800,74 @@ const Parser = class {
 		}
 	}
 
-	#parse_body(skip_push) {
-		this.#expect(this.#n(), "OBRA")
+	parse_body(skip_push) {
+		this.expect(this.n(), "OBRA")
 		let body = []
 
 		if (!skip_push)
-			this.#push_scope()
+			this.push_scope()
 
-		while (this.#p().kind !== "CBRA") {
-			if (this.#is_type_next(true))
-				body.push(this.#parse_def_var())
+		while (this.p().kind !== "CBRA") {
+			if (this.is_type_next(true))
+				body.push(this.parse_def_var())
 
-			else if (this.#p().kind === "RET")
-				body.push(this.#parse_func_ret())
+			else if (this.p().kind === "RET")
+				body.push(this.parse_func_ret())
 
-			else if (this.#p().kind == "ST_IF")
-				body.push(this.#parse_st_if())
+			else if (this.p().kind == "ST_IF")
+				body.push(this.parse_st_if())
 
-			else if (this.#p().kind == "ST_WHILE")
-				body.push(this.#parse_st_while())
+			else if (this.p().kind == "ST_WHILE")
+				body.push(this.parse_st_while())
 
-			else if (this.#p().kind == "LP_BREAK") {
+			else if (this.p().kind == "LP_BREAK") {
 				body.push({kind: "LP_BREAK"})
-				this.#n(); this.#expect(this.#n(), "SEMI")
+				this.n(); this.expect(this.n(), "SEMI")
 			}
 
-			else if (this.#p().kind == "LP_CONTINUE") {
+			else if (this.p().kind == "LP_CONTINUE") {
 				body.push({kind: "LP_CONTINUE"})
-				this.#n(); this.#expect(this.#n(), "SEMI")
+				this.n(); this.expect(this.n(), "SEMI")
 			}
 
-			else body.push(this.#parse_mut_var())
+			else body.push(this.parse_mut_var())
 		}
 
 		if (!skip_push)
-			this.#pop_scope()
+			this.pop_scope()
 
-		this.#n()
+		this.n()
 
 		return body
 	}
 
-	#parse_def_func(is_extern) {
-		let _type = this.#parse_type(false).type
+	parse_def_func(is_extern) {
+		let _type = this.parse_type(false).type
 
-		this.#expect(this.#p(), "ID")
-		let _name = this.#n().data
+		this.expect(this.p(), "ID")
+		let _name = this.n().data
 
-		this.#expect(this.#n(), "OPAR")
+		this.expect(this.n(), "OPAR")
 		let _args = []
 
-		while (this.#p().kind !== "CPAR") {
-			if (this.#p().kind == "COM") {
-				this.#n()
-			} else if (this.#p2().kind == "ID") {
-				let _type = this.#parse_type(false).type
-				this.#expect(this.#p(), "ID")
-				let _name = this.#n().data
+		while (this.p().kind !== "CPAR") {
+			if (this.p().kind == "COM") {
+				this.n()
+			} else if (this.p2().kind == "ID") {
+				let _type = this.parse_type(false).type
+				this.expect(this.p(), "ID")
+				let _name = this.n().data
 				_args.push({
 					type: _type,
 					name: _name,
 					id: `V${this.var_ind++}`
 				})
 			} else {
-				this.#expect(this.#p(), "COM")
+				this.expect(this.p(), "COM")
 			}
 		}
 
-		this.#n()
+		this.n()
 
 		let func = {
 			kind: "DEF_FUNC",
@@ -879,7 +878,7 @@ const Parser = class {
 		}
 
 		this.cur_func = func
-		this.#symbol_table_add(this.#p().line, _name, {
+		this.symbol_table_add(this.p().line, _name, {
 			kind: "FUNC",
 			type: _type,
 			args: _args,
@@ -894,10 +893,10 @@ const Parser = class {
 		}
 
 		if (!is_extern) {
-			this.#push_scope()
+			this.push_scope()
 
 			_args.forEach((arg) => {
-				this.#symbol_table_add(this.#p().line, arg.name, {
+				this.symbol_table_add(this.p().line, arg.name, {
 					kind: "VAR",
 					type: arg.type,
 					id: arg.id,
@@ -905,30 +904,30 @@ const Parser = class {
 			})
 
 			func.body = []
-			if (this.#p().kind !== "SEMI") {
-				func.body = this.#parse_body(true)
-			} else this.#n()
+			if (this.p().kind !== "SEMI") {
+				func.body = this.parse_body(true)
+			} else this.n()
 
-			this.#pop_scope()
+			this.pop_scope()
 		} else {
-			this.#expect(this.#n(), "SEMI")
+			this.expect(this.n(), "SEMI")
 		}
 
 		return func
 	}
 
 	parse() {
-		this.#push_scope()
-		while (this.#p().kind != "EOF") {
-			if (this.#p3().kind == "OPAR") {
-				this.prog.body.push(this.#parse_def_func(false))
-			} else if (this.#p2().kind == "ID") {
-				this.prog.body.push(this.#parse_def_var())
-			} else if (this.#p().kind == "EXTERN") {
-				this.#n()
-				this.#parse_def_func(true)
+		this.push_scope()
+		while (this.p().kind != "EOF") {
+			if (this.p3().kind == "OPAR") {
+				this.prog.body.push(this.parse_def_func(false))
+			} else if (this.p2().kind == "ID") {
+				this.prog.body.push(this.parse_def_var())
+			} else if (this.p().kind == "EXTERN") {
+				this.n()
+				this.parse_def_func(true)
 			} else {
-				this.#error(this.#p().line, "invalid high level declaration")
+				this.error(this.p().line, "invalid high level declaration")
 			}
 		}
 	}
@@ -945,13 +944,13 @@ const Codegen = class {
 		this.parser = parser
 	}
 
-	#emit(text) {
+	emit(text) {
 		for (let i = 0; i < this.intend; i++)
 			this.code += "    "
 		this.code += text + "\n"
 	}
 
-	#wat_type(type) {
+	wat_type(type) {
 		switch (type.kind) {
 		case "POINTER": return "i32"
 		case "ARRAY":   return "i32"
@@ -960,181 +959,180 @@ const Codegen = class {
 		}
 	}
 
-	#emit_expr(expr) {
+	emit_expr(expr) {
 		switch (expr.kind) {
 		case "LIT":
-			this.#emit(`${this.#wat_type(expr.type)}.const ${expr.value}`)
+			this.emit(`${this.wat_type(expr.type)}.const ${expr.value}`)
 			break
 
 		case "CALL_FUNC":
 			expr.args.forEach((it) => {
-				this.#emit_expr(it)
+				this.emit_expr(it)
 			})
 
-			this.#emit(`call \$${expr.name}`)
+			this.emit(`call \$${expr.name}`)
 			break
 
 		case "VAR":
-			this.#emit(`local.get \$${expr.id}`)
+			this.emit(`local.get \$${expr.id}`)
 			break
 
 		case "EXPR_UN": {
-			this.#emit_expr(expr.oprd)
-			console.log(expr)
-			let type = this.#wat_type(expr.type)
+			this.emit_expr(expr.oprd)
+			let type = this.wat_type(expr.type)
 
 			if (expr.op === "CAST") {
 				switch (expr.oprd.type.kind) {
-					case "INT":   this.#emit(`${type}.convert_i32_s`); break
-					case "FLOAT": this.#emit(`${type}.trunc_f32_s`);   break
+					case "INT":   this.emit(`${type}.convert_i32_s`); break
+					case "FLOAT": this.emit(`${type}.trunc_f32_s`);   break
 				}
 				return
 			}
 
 			switch (expr.op) {
-			case "NEG": this.#emit(`${type}.neg`); break
-			case "NOT": this.#emit(`${type}.eqz`); break
+			case "NEG": this.emit(`${type}.neg`); break
+			case "NOT": this.emit(`${type}.eqz`); break
 			}
 		} break
 
 		case "EXPR_BIN": {
 			if (expr.op === "EQ") {
-				this.#emit_expr(expr.rhs)
-				this.#emit(`local.set \$${expr.lhs.id}`)
+				this.emit_expr(expr.rhs)
+				this.emit(`local.set \$${expr.lhs.id}`)
 				return
 			}
 
-			this.#emit_expr(expr.lhs)
-			this.#emit_expr(expr.rhs)
+			this.emit_expr(expr.lhs)
+			this.emit_expr(expr.rhs)
 
-			let type = this.#wat_type(expr.type)
+			let type = this.wat_type(expr.type)
 			switch (expr.op) {
-			case "ADD": this.#emit(`${type}.add`); break
-			case "SUB": this.#emit(`${type}.sub`); break
-			case "MUL": this.#emit(`${type}.mul`); break
-			case "DIV": this.#emit(`${type}.div`); break
-			case "EQ_EQ": this.#emit(`${type}.eq`); break
-			case "NOT_EQ": this.#emit(`${type}.ne`); break
-			case "AND": this.#emit(`${type}.and`); break
-			case "OR": this.#emit(`${type}.or`); break
+			case "ADD": this.emit(`${type}.add`); break
+			case "SUB": this.emit(`${type}.sub`); break
+			case "MUL": this.emit(`${type}.mul`); break
+			case "DIV": this.emit(`${type}.div`); break
+			case "EQ_EQ": this.emit(`${type}.eq`); break
+			case "NOT_EQ": this.emit(`${type}.ne`); break
+			case "AND": this.emit(`${type}.and`); break
+			case "OR": this.emit(`${type}.or`); break
 
 			case "LESS":
 				switch (expr.type.kind) {
-				case "INT":   this.#emit(`${type}.lt_s`); break
-				case "FLOAT": this.#emit(`${type}.lt`); break
+				case "INT":   this.emit(`${type}.lt_s`); break
+				case "FLOAT": this.emit(`${type}.lt`); break
 				} break
 
 			case "GREATER":
 				switch (expr.type.kind) {
-				case "INT":   this.#emit(`${type}.gt_s`); break
-				case "FLOAT": this.#emit(`${type}.gt`); break
+				case "INT":   this.emit(`${type}.gt_s`); break
+				case "FLOAT": this.emit(`${type}.gt`); break
 				} break
 
 			case "LESS_EQ":
 				switch (expr.type.kind) {
-				case "INT":   this.#emit(`${type}.le_s`); break
-				case "FLOAT": this.#emit(`${type}.le`); break
+				case "INT":   this.emit(`${type}.le_s`); break
+				case "FLOAT": this.emit(`${type}.le`); break
 				} break
 
 			case "GREATER_EQ":
 				switch (expr.type.kind) {
-				case "INT":   this.#emit(`${type}.ge_s`); break
-				case "FLOAT": this.#emit(`${type}.ge`); break
+				case "INT":   this.emit(`${type}.ge_s`); break
+				case "FLOAT": this.emit(`${type}.ge`); break
 				} break
 			}
 		} break
 		}
 	}
 
-	#emit_def_var(vd) {
-		this.#emit(`(local \$${vd.id} ${this.#wat_type(vd.type)})`);
+	emit_def_var(vd) {
+		this.emit(`(local \$${vd.id} ${this.wat_type(vd.type)})`);
 	}
 
-	#emit_def_var_val(vd) {
+	emit_def_var_val(vd) {
 		if (vd.expr !== null) {
-			this.#emit_expr(vd.expr)
-			this.#emit(`local.set \$${vd.id}`)
+			this.emit_expr(vd.expr)
+			this.emit(`local.set \$${vd.id}`)
 		}
 	}
 
-	#emit_mut_var(mv) {
-		this.#emit_expr(mv.expr)
+	emit_mut_var(mv) {
+		this.emit_expr(mv.expr)
 	}
 
-	#emit_func_ret(rt) {
+	emit_func_ret(rt) {
 		if (rt.expr !== null)
-			this.#emit_expr(rt.expr)
-		this.#emit("return")
+			this.emit_expr(rt.expr)
+		this.emit("return")
 	}
 
-	#emit_st_while(wst) {
+	emit_st_while(wst) {
 		this.loop_ind++
-		this.#emit(`(block \$WO${this.loop_ind}`)
+		this.emit(`(block \$WO${this.loop_ind}`)
 		this.intend++
-			this.#emit(`(loop \$WI${this.loop_ind}`)
+			this.emit(`(loop \$WI${this.loop_ind}`)
 
 			this.intend++
-				this.#emit_expr(wst.cond)
-				this.#emit("i32.eqz")
-				this.#emit(`br_if \$WO${this.loop_ind}`)
-				this.#emit("")
+				this.emit_expr(wst.cond)
+				this.emit("i32.eqz")
+				this.emit(`br_if \$WO${this.loop_ind}`)
+				this.emit("")
 			this.intend--
 
-			this.#emit_body(wst.body)
+			this.emit_body(wst.body)
 
 			this.intend++
-				this.#emit(`br \$WI${this.loop_ind}`)
+				this.emit(`br \$WI${this.loop_ind}`)
 			this.intend--
 
-			this.#emit(")")
+			this.emit(")")
 		this.intend--
-		this.#emit(")")
+		this.emit(")")
 		this.loop_ind--
 	}
 
-	#emit_st_if(ifst) {
-		this.#emit_expr(ifst.cond)
+	emit_st_if(ifst) {
+		this.emit_expr(ifst.cond)
 
-		this.#emit("(if")
+		this.emit("(if")
 		this.intend++
 
-		this.#emit("(then")
-		this.#emit_body(ifst.body)
-		this.#emit(")")
+		this.emit("(then")
+		this.emit_body(ifst.body)
+		this.emit(")")
 
 		if (ifst.next !== null) {
-			this.#emit("(else")
+			this.emit("(else")
 
 			if (ifst.next.kind == "ST_IF") {
 				this.intend++
-				this.#emit_st_if(ifst.next)
+				this.emit_st_if(ifst.next)
 				this.intend--
-			} else this.#emit_body(ifst.next.body)
+			} else this.emit_body(ifst.next.body)
 
-			this.#emit(")")
+			this.emit(")")
 		}
 
 		this.intend--
-		this.#emit(")")
+		this.emit(")")
 	}
 
-	#emit_body(body) {
+	emit_body(body) {
 		this.intend++
 
 		body.forEach((it) => {
 			switch (it.kind) {
-			case "DEF_VAR":  this.#emit_def_var_val(it); break
-			case "MUT_VAR":  this.#emit_mut_var(it);     break
-			case "ST_IF":    this.#emit_st_if(it);       break
-			case "ST_WHILE": this.#emit_st_while(it);    break
-			case "RET":      this.#emit_func_ret(it);    break
+			case "DEF_VAR":  this.emit_def_var_val(it); break
+			case "MUT_VAR":  this.emit_mut_var(it);     break
+			case "ST_IF":    this.emit_st_if(it);       break
+			case "ST_WHILE": this.emit_st_while(it);    break
+			case "RET":      this.emit_func_ret(it);    break
 
 			case "LP_BREAK":
-				this.#emit(`br \$WO${this.loop_ind}`)
+				this.emit(`br \$WO${this.loop_ind}`)
 				break
 
 			case "LP_CONTINUE":
-				this.#emit(`br \$WI${this.loop_ind}`)
+				this.emit(`br \$WI${this.loop_ind}`)
 				break
 			}
 		})
@@ -1142,69 +1140,69 @@ const Codegen = class {
 		this.intend--
 	}
 
-	#emit_func_sig(func) {
+	emit_func_sig(func) {
 		let skip = []
 		func.args.forEach((it) => {
 			skip.push(it.id)
-			this.#emit(`(param \$${it.id} ${this.#wat_type(it.type)})`)
+			this.emit(`(param \$${it.id} ${this.wat_type(it.type)})`)
 		})
 
 		switch (func.type.kind) {
-		case "INT":   this.#emit("(result i32)"); break
-		case "FLOAT": this.#emit("(result f32)"); break
-		case "VOID":  this.#emit("(result)");     break
+		case "INT":   this.emit("(result i32)"); break
+		case "FLOAT": this.emit("(result f32)"); break
+		case "VOID":  this.emit("(result)");     break
 		}
 
 		return skip
 	}
 
-	#emit_def_func(func) {
-		this.#emit(`(func \$${func.name} (export "${func.name}")`)
+	emit_def_func(func) {
+		this.emit(`(func \$${func.name} (export "${func.name}")`)
 		this.intend++
 
-		let skip = this.#emit_func_sig(func)
+		let skip = this.emit_func_sig(func)
 
-		this.#emit("")
+		this.emit("")
 		let locals = false
 		func.vars.forEach((it) => {
 			if (!skip.includes(it.id)) {
 				locals = true
-				this.#emit_def_var(it)
+				this.emit_def_var(it)
 			}
 		})
 
-		if (locals) this.#emit("")
+		if (locals) this.emit("")
 		this.intend--
 
-		this.#emit_body(func.body)
+		this.emit_body(func.body)
 
-		this.#emit(")")
+		this.emit(")")
 	}
 
 	emit_prog() {
-		this.#emit("(module")
+		this.emit("(module")
 		this.intend++
 
 		this.parser.externs.forEach((it) => {
-			this.#emit(`(import "env" "${it.name}" (func \$${it.name}`)
+			this.emit(`(import "env" "${it.name}" (func \$${it.name}`)
 			this.intend++
-			this.#emit_func_sig(it)
+			this.emit_func_sig(it)
 			this.intend--
-			this.#emit("))")
+			this.emit("))")
 		})
 
 		this.parser.prog.body.forEach((it) => {
 			switch (it.kind) {
-			case "DEF_FUNC": this.#emit_def_func(it); break
+			case "DEF_FUNC": this.emit_def_func(it); break
 			}
 		})
 
 		this.intend--
-		this.#emit(")")
+		this.emit(")")
 	}
 }
 
-function c2wat(code) {
+export function compileCToWat(code) {
 	let lexer = new Lexer(code)
 	let parser = new Parser(lexer)
 	parser.parse()

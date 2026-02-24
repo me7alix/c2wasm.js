@@ -4,13 +4,26 @@
 		<meta charset="utf-8" />
 		<title>c2wasm demo</title>
 		<style>
+			h1 { margin-top: 0; }
+
+			html, body {
+				height: 100%;
+				margin: 0;
+			}
+
 			body {
 				background: #0b0b0b;
 				color: #ddd;
 				font-family: monospace;
-				margin: 12px;
+
+				display: flex;
+				flex-direction: column;
+
+				padding: 12px;
+				box-sizing: border-box;
 			}
-			textarea {
+
+			#editor {
 				width: 100%;
 				height: 260px;
 				background: #111;
@@ -18,7 +31,9 @@
 				padding: 10px;
 				border: 1px solid #222;
 				box-sizing: border-box;
+				resize: vertical;
 			}
+
 			input,
 			button {
 				background: #151515;
@@ -28,13 +43,20 @@
 				margin: 6px 4px;
 				font-family: monospace;
 			}
+
 			#console {
 				background: #000;
+				color: #fff;
 				padding: 10px;
 				white-space: pre-wrap;
-				min-height: 120px;
+
 				margin-top: 8px;
+				width: 100%;
+				box-sizing: border-box;
 				border: 1px solid #222;
+
+				flex: 1;
+				resize: none;
 			}
 		</style>
 	</head>
@@ -66,12 +88,13 @@ void fib(int n) {
 			<button id="runBtn">Run</button>
 			<button id="clearBtn">Clear</button>
 		</div>
-		<div id="console"></div>
+		<textarea readonly id="console"></textarea>
 
 		<script src="https://cdn.jsdelivr.net/npm/wabt@1.0.39/index.min.js"></script>
-		<script src="./c2wat.js"></script>
 
-		<script>
+		<script type="module">
+			import { compileCToWat } from "./c2wat.js";
+
 			(async () => {
 				const out = document.getElementById("console");
 				const log = (...a) => (out.textContent += a.join("") + "\n");
@@ -86,7 +109,7 @@ void fib(int n) {
 						let wat = "";
 
 						try {
-							wat = c2wat(code);
+							wat = compileCToWat(code);
 							console.log(wat);
 						} catch (e) {
 							log(e);
@@ -94,13 +117,8 @@ void fib(int n) {
 							return;
 						}
 
-						function print_int(v) {
-							log("$ ", v)
-						}
-
-						function print_float(v) {
-							log("$ ", v)
-						}
+						function print_int(v)   { log("$ ", v); }
+						function print_float(v) { log("$ ", v); }
 
 						const mod = wabt.parseWat("module.wat", wat);
 						const bin = mod.toBinary({ log: false, canonicalize_lebs: true });

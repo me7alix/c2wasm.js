@@ -41,7 +41,7 @@ int add(int a, int b) {
 
 <declaration> ::= <type> <identifier> ("=" <expression>)? ";"
 
-<statement> ::= 
+<statement> ::=
       <assignment>
     | <if-statement>
     | <while-statement>
