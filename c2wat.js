@@ -204,10 +204,10 @@ const Parser = class {
 		}
 	}
 
-	n()  { return this.lexer.next();  }
-	p()  { return this.lexer.peek();  }
-	p2() { return this.lexer.peek2(); }
-	p3() { return this.lexer.peek3(); }
+	n()  { return this.lexer.next();  } // next
+	p()  { return this.lexer.peek();  } // peek
+	p2() { return this.lexer.peek2(); } // peek2
+	p3() { return this.lexer.peek3(); } // peek3
 
 	error(line, msg) {
 		let lines = this.lexer.code.split('\n')
@@ -386,6 +386,7 @@ const Parser = class {
 		let count = 0
 		let _name = this.n().data
 		let _args = []
+		let _line = this.p().line
 		let smbl = this.symbol_table_get(
 			this.p().line,
 			this.pref_func(_name))
@@ -394,6 +395,9 @@ const Parser = class {
 
 		this.expect(this.n(), "OPAR")
 		while (this.p().kind !== "CPAR") {
+			if (count > _fargs.length - 1)
+				this.error(_line, "too many arguments")
+
 			let _expr = this.expr_num_cast(
 				this.parse_expr(["CPAR", "COM"]),
 				_fargs[count].type)
@@ -403,17 +407,14 @@ const Parser = class {
 			if (this.p().kind === "COM")
 				this.n()
 
-			if (count > _fargs.length - 1)
-				this.error(_expr.line, "too many arguments")
-
 			if (!this.compare_types(_expr.type, _fargs[count].type))
-				this.error(_expr.line, "types mismatching")
+				this.error(_line, "types mismatching")
 
 			count++
 		}
 
 		if (count < _fargs.length)
-			this.error(expr.line, "not enough arguments")
+			this.error(_line, "not enough arguments")
 
 		this.n()
 
@@ -421,6 +422,7 @@ const Parser = class {
 			kind: "CALL_FUNC",
 			type: _type,
 			name: _name,
+			line: _line,
 			args: _args,
 		}
 	}
@@ -468,11 +470,11 @@ const Parser = class {
 			expr.type = lhst
 
 			if ((lhst.kind === "FLOAT" && rhst.kind === "INT") ||
-				(rhst.kind === "FLOAT" && lhst.kind === "INT")) {
+				(rhst.kind === "FLOAT" && lhst.kind === "INT") && expr.op !== "EQ") {
+				expr.type = { kind: "FLOAT" }
 				let lhsti = lhst.kind === "INT"
 				if (lhsti) expr.lhs = this.expr_num_cast(expr.lhs, rhst)
 				else       expr.rhs = this.expr_num_cast(expr.rhs, lhst)
-				expr.type = { kind: "FLOAT" }
 			} else if ((lhst.kind === "ARRAY" && rhst.kind === "INT") ||
 				((rhst.kind === "ARRAY" && lhst.kind === "INT")) ||
 				(lhst.kind === "POINTER" && rhst.kind === "INT") ||
@@ -524,20 +526,20 @@ const Parser = class {
 					rhs = this.op_precedence(nodes[i+1].op, true)
 
 				if (lhs === -1 && rhs === -1)
-					this.error(this.p().line, "invalid combination of operators and operands")
+					this.error(nodes[i].line, "invalid combination of operators and operands")
 
 				if (lhs > rhs) {
 					if (nodes[i-1].kind === "EXPR_BIN") {
 						nodes[i-1].rhs = nodes[i]
 					} else if (nodes[i-1].kind === "EXPR_UN") {
 						nodes[i-1].oprd = nodes[i]
-					} else this.error(this.p().line, "invalid expression")
+					} else this.error(nodes[i-1].line, "invalid expression")
 				} else {
 					if (nodes[i+1].kind === "EXPR_BIN") {
 						nodes[i+1].lhs = nodes[i]
 					} else if (nodes[i+1].kind === "EXPR_UN") {
 						nodes[i+1].oprd = nodes[i]
-					} else this.error(this.p().line, "invalid expression")
+					} else this.error(nodes[i+1].line, "invalid expression")
 				}
 
 				nodes.splice(i--, 1)
@@ -763,7 +765,7 @@ const Parser = class {
 		let _cond = this.parse_expr(["CPAR"])
 		let _body = this.parse_body(false)
 
-		let if_st = {
+		let st_if = {
 			kind: "ST_IF",
 			cond: _cond,
 			body: _body,
@@ -773,17 +775,17 @@ const Parser = class {
 		if (this.p().kind === "ST_ELSE") {
 			if (this.p2().kind == "ST_IF") {
 				this.n();
-				if_st.next = this.parse_st_if()
+				st_if.next = this.parse_st_if()
 			} else {
 				this.n();
-				if_st.next = {
+				st_if.next = {
 					kind: "ST_ELSE",
 					body: this.parse_body(false),
 				}
 			}
 		}
 
-		return if_st
+		return st_if
 	}
 
 	parse_st_while() {
