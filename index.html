@@ -63,30 +63,17 @@
 
 	<body>
 		<h1>C to WebAssembly compiler</h1>
-<textarea id="editor">
-extern void print_int(int val);
-extern void print_float(float val);
-
-void fib(int n) {
-  int a = 1;
-  int b = 1;
-
-  int i = 0; while (i < n) {
-    print_int(a);
-
-    int t = b;
-    b = b + a;
-    a = t;
-
-    i = i + 1;
-  }
-}</textarea>
+		<textarea id="editor"></textarea>
 		<div>
 			<button id="compileBtn">Compile</button>
 			<label>fn: <input id="fname" value="fib" /></label>
 			<label>args: <input id="fargs" value="10" /></label>
 			<button id="runBtn">Run</button>
 			<button id="clearBtn">Clear</button>
+			<label>&nbsp;&nbsp;&nbsp;</label>
+			<label>examples:</label>
+			<button id="fibEx">Fibonacci sequence</button>
+			<button id="mandEx">Mandelbrot set</button>
 		</div>
 		<textarea readonly id="console"></textarea>
 
@@ -96,11 +83,33 @@ void fib(int n) {
 			import { compileCToWat } from "./c2wat.js";
 
 			(async () => {
+				async function loadExample(name) {
+					const response = await fetch(`examples/${name}`);
+					const text = await response.text();
+
+					document.getElementById("editor").value = text;
+				}
+
+				loadExample("fibseq.c")
+
 				const out = document.getElementById("console");
 				const log = (...a) => (out.textContent += a.join("") + "\n");
+				const logch = (ch) => (out.textContent += ch);
 
 				let wabt = await WabtModule();
 				let instance = null;
+
+				document.getElementById("fibEx").addEventListener("click", () => {
+					document.getElementById("fname").value = "fib"
+					document.getElementById("fargs").value = "10"
+					loadExample("fibseq.c")
+				})
+
+				document.getElementById("mandEx").addEventListener("click", () => {
+					document.getElementById("fname").value = "main"
+					document.getElementById("fargs").value = ""
+					loadExample("mandset.c")
+				})
 
 				document.getElementById("compileBtn").addEventListener("click", async () => {
 					out.textContent = "";
@@ -119,12 +128,13 @@ void fib(int n) {
 
 						function print_int(v)   { log("$ ", v); }
 						function print_float(v) { log("$ ", v); }
+						function print_char(v)  { logch(String.fromCharCode(v)); }
 
 						const mod = wabt.parseWat("module.wat", wat);
 						const bin = mod.toBinary({ log: false, canonicalize_lebs: true });
 						const wasmBytes = bin.buffer;
 						const res = await WebAssembly.instantiate(wasmBytes, {
-							env: { print_int, print_float }
+							env: { print_int, print_float, print_char }
 						});
 
 						instance = res.instance;
