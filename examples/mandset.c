@@ -2,22 +2,6 @@ extern void print_int(int val);
 extern void print_float(float val);
 extern void print_char(int val);
 
-int grad(int i) {
-  if (i == 0)  { return ' '; }
-  if (i == 1)  { return '.'; }
-  if (i == 2)  { return ','; }
-  if (i == 3)  { return ':'; }
-  if (i == 4)  { return ';'; }
-  if (i == 5)  { return 'i'; }
-  if (i == 6)  { return 'l'; }
-  if (i == 7)  { return 'o'; }
-  if (i == 8)  { return 'x'; }
-  if (i == 9)  { return '0'; }
-  if (i == 10) { return '#'; }
-  if (i == 11) { return '@'; }
-  return 0;
-}
-
 void main() {
   float fromX = -2.0;
   float fromY = -1.1;
@@ -25,12 +9,28 @@ void main() {
   float toY   = 1.1;
   float stepX = 0.032;
   float stepY = 0.075;
+
+  char *grad = (char*)64;
   int grad_len = 12;
+  grad[0]  = ' ';
+  grad[1]  = '.';
+  grad[2]  = ',';
+  grad[3]  = ':';
+  grad[4]  = ';';
+  grad[5]  = 'i';
+  grad[6]  = 'l';
+  grad[7]  = 'o';
+  grad[8]  = 'x';
+  grad[9]  = '0';
+  grad[10] = '#';
+  grad[11] = '@';
 
   float i = fromY; while (i < toY) {
     float j = fromX; while (j < toX) {
-      float c_r = j; float c_i = i;
-      float z_r = j; float z_i = i;
+      float c_r = j;
+      float c_i = i;
+      float z_r = j;
+      float z_i = i;
 
       int iters = 100;
       int iter = 0;
@@ -49,8 +49,8 @@ void main() {
         }
       }
 
-      int cg = (int)((float)iter / iters * (grad_len - 1));
-      print_char(grad(cg));
+      int idx = (int)(iter / (float)iters * (grad_len - 1));
+      print_char(grad[idx]);
       j = j + stepX;
     }
 

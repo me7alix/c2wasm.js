@@ -7,8 +7,8 @@ const Lexer = class {
 		this.line = 0
 	}
 
-	ch()  { return this.code[this.count] + "";     }
-	ch2() { return this.code[this.count + 1] + ""; }
+	ch()  { return this.code[this.count]     + ''; }
+	ch2() { return this.code[this.count + 1] + ''; }
 
 	token(_kind, _data) {
 		return {
@@ -20,10 +20,8 @@ const Lexer = class {
 
 	next() {
 		let res
-
-		if (this.code.length <= this.count) {
+		if (this.code.length <= this.count)
 			return this.token("EOF", "")
-		}
 
 		switch (this.ch()) {
 		case ';': res = this.token("SEMI",   ";"); break
@@ -150,33 +148,23 @@ const Lexer = class {
 
 				this.count--
 
-				if (id === "while") {
-					res = this.token("ST_WHILE", id)
-				} else if (id === "if") {
-					res = this.token("ST_IF", id)
-				} else if (id === "else") {
-					res = this.token("ST_ELSE", id)
-				} else if (id === "void") {
-					res = this.token("TP_VOID", id)
-				} else if (id === "int") {
-					res = this.token("TP_INT", id)
-				} else if (id === "break") {
-					res = this.token("LP_BREAK", id)
-				} else if (id === "continue") {
-					res = this.token("LP_CONTINUE", id)
-				} else if (id === "float") {
-					res = this.token("TP_FLOAT", id)
-				} else if (id === "extern") {
-					res = this.token("EXTERN", id)
-				} else if (id === "return") {
-					res = this.token("RET", id)
-				} else {
-					res = this.token("ID", id)
+				switch (id) {
+					case "while":    res = this.token("ST_WHILE",    id); break
+					case "if":       res = this.token("ST_IF",       id); break
+					case "else":     res = this.token("ST_ELSE",     id); break
+					case "break":    res = this.token("LP_BREAK",    id); break
+					case "continue": res = this.token("LP_CONTINUE", id); break
+					case "extern":   res = this.token("EXTERN",      id); break
+					case "return":   res = this.token("RET",         id); break
+					default:         res = this.token("ID",          id); break
 				}
 			}
 
 			else {
-				res = this.token("ERR", "invalid character")
+				res = this.token(
+					"ERR",
+					"invalid character",
+				)
 			}
 		}
 
@@ -290,18 +278,15 @@ const Parser = class {
 	}
 
 	compare_types(a, b) {
-		if (a.kind !== b.kind)
-			return false
-
+		if (a.kind !== b.kind) return false
 		if (a.kind === "POINTER" || a.kind === "ARRAY") {
 			if (a.kind === "ARRAY") {
-				if (a.length !== b.length)
+				if (a.length !== b.length) {
 					return false
+				}
 			}
-
 			return this.compare_types(a.base, b.base);
 		}
-
 		return true
 	}
 
@@ -310,13 +295,18 @@ const Parser = class {
 		let _name = null
 		let tp = ""
 
-		switch (this.n().kind) {
-		case "TP_INT":   tp = "INT";   break
-		case "TP_VOID":  tp = "VOID";  break
-		case "TP_FLOAT": tp = "FLOAT"; break
-		default: this.error(this.p().line, "no such type")
+		if (this.p().kind !== "ID")
+			this.error(this.p().line, "aincorrect type")
+
+		switch (this.p().data) {
+			case "int":   tp = "INT";   break
+			case "float": tp = "FLOAT"; break
+			case "void":  tp = "VOID";  break
+			case "char":  tp = "CHAR";  break
+			default: this.error(this.p().line, "bincorrect type")
 		}
 
+		this.n();
 		_type = { kind: tp }
 
 		while (this.p().kind === "STAR") {
@@ -375,6 +365,8 @@ const Parser = class {
 		case "NOT":
 		case "CAST":
 			return l ? -1 : 30
+		case "ARR":
+			return l ? 40 : 41
 		}
 	}
 
@@ -389,19 +381,20 @@ const Parser = class {
 
 	tok_to_bin_op(tok) {
 		switch (tok.kind) {
-		case "PLUS":       return "ADD"
-		case "MINUS":      return "SUB"
-		case "STAR":       return "MUL"
-		case "SLASH":      return "DIV"
-		case "AND":        return "AND"
-		case "OR":         return "OR"
-		case "EQ":         return "EQ"
-		case "EQ_EQ":      return "EQ_EQ"
-		case "NOT_EQ":     return "NOT_EQ"
-		case "LESS":       return "LESS"
-		case "GREATER":    return "GREATER"
-		case "LESS_EQ":    return "LESS_EQ"
-		case "GREATER_EQ": return "GREATER_EQ"
+			case "PLUS":       return "ADD"
+			case "MINUS":      return "SUB"
+			case "STAR":       return "MUL"
+			case "SLASH":      return "DIV"
+			case "AND":        return "AND"
+			case "OR":         return "OR"
+			case "EQ":         return "EQ"
+			case "EQ_EQ":      return "EQ_EQ"
+			case "NOT_EQ":     return "NOT_EQ"
+			case "LESS":       return "LESS"
+			case "GREATER":    return "GREATER"
+			case "LESS_EQ":    return "LESS_EQ"
+			case "GREATER_EQ": return "GREATER_EQ"
+			case "OSQBRA":     return "ARR"
 		}
 	}
 
@@ -461,8 +454,14 @@ const Parser = class {
 				type: { kind: "FLOAT" },
 				oprd: num,
 			}
+		} else if (type.kind === "INT" && num.type.kind === "CHAR") {
+			return {
+				kind: "EXPR_UN",
+				op: "CAST",
+				type: { kind: "INT" },
+				oprd: num,
+			}
 		}
-
 		return num
 	}
 
@@ -484,6 +483,8 @@ const Parser = class {
 			}
 
 			expr.type = this.expr_calc_types(expr.oprd)
+			if (expr.op === "DEREF")
+				expr.type = expr.type.base
 			return expr.type
 
 		case "EXPR_BIN":
@@ -501,21 +502,34 @@ const Parser = class {
 				let lhsti = lhst.kind === "INT"
 				if (lhsti) expr.lhs = this.expr_num_cast(expr.lhs, rhst)
 				else       expr.rhs = this.expr_num_cast(expr.rhs, lhst)
-			} else if ((lhst.kind === "ARRAY" && rhst.kind === "INT") ||
-				((rhst.kind === "ARRAY" && lhst.kind === "INT")) ||
+			} else if (
+				(lhst.kind === "ARRAY"   && rhst.kind === "INT") ||
+				(rhst.kind === "ARRAY"   && lhst.kind === "INT") ||
 				(lhst.kind === "POINTER" && rhst.kind === "INT") ||
-				((rhst.kind === "POINTER" && lhst.kind === "INT")) ) {
-				if (expr.op !== "ADD" || expr.op !== "SUB") {
+				(rhst.kind === "POINTER" && lhst.kind === "INT")
+			) {
+				if (expr.op !== "ADD" && expr.op !== "SUB" && expr.op !== "ARR") {
 					this.error(expr.line, "invalid operation")
 				}
 			} else if (!this.compare_types(lhst, rhst)) {
 				this.error(expr.line, "types mismatching")
 			}
 
+			if (expr.op === "ARR") {
+				if (lhst.kind !== "POINTER") {
+					if (rhst.kind !== "POINTER")
+						this.error(expr.line, "pointer/array expected");
+					let tmp = expr.lhs;
+					expr.lhs = expr.rhs;
+					expr.rhs = tmp;
+				}
+				expr.type = expr.lhs.type.base
+			}
+
 			switch (expr.op) {
-			case "OR": case "AND":
-			case "EQ_EQ": case "NOT_EQ":
-			case "LESS": case "GREATER":
+			case "OR":      case "AND":
+			case "EQ_EQ":   case "NOT_EQ":
+			case "LESS":    case "GREATER":
 			case "LESS_EQ": case "GREATER_EQ":
 				expr.type = { kind: "INT" }
 			}
@@ -591,8 +605,8 @@ const Parser = class {
 				nodes.push({
 					kind: "LIT",
 					line: this.p().line,
-					type: { kind: "INT" },
-					lit: "INT",
+					type: { kind: "CHAR" },
+					lit: "CHAR",
 					value: this.n().data.charCodeAt(0),
 				})
 			} break
@@ -634,15 +648,13 @@ const Parser = class {
 					this.expect(this.n(), "CPAR")
 				} else {
 					nodes.push(this.parse_expr(["CPAR"]))
-				}
-				break
+				} break
 
 			case "ID": {
 				if (this.p2().kind != "OPAR") {
 					let smbl = this.symbol_table_get(
 						this.p().line,
 						this.pref_var(this.p().data))
-
 					nodes.push({
 						kind: "VAR",
 						line: this.p().line,
@@ -684,6 +696,18 @@ const Parser = class {
 					oprd: null,
 				})
 			} break
+
+			case "OSQBRA": {
+				nodes.push({
+					kind: "EXPR_BIN",
+					line: this.p().line,
+					op: this.tok_to_bin_op(this.n()),
+					type: "",
+					lhs: null, rhs: null,
+				})
+				nodes.push(this.parse_expr(["CSQBRA"]))
+			} break
+
 
 			case "AMP":
 			case "STAR":
@@ -957,15 +981,16 @@ const Parser = class {
 	parse() {
 		this.push_scope()
 		while (this.p().kind != "EOF") {
-			if (this.p3().kind == "OPAR") {
+			if (this.is_type_next(true)) {
 				this.prog.body.push(this.parse_def_func(false))
-			} else if (this.p2().kind == "ID") {
-				this.prog.body.push(this.parse_def_var())
-			} else if (this.p().kind == "EXTERN") {
-				this.n()
-				this.parse_def_func(true)
+				//this.prog.body.push(this.parse_def_var())
 			} else {
-				this.error(this.p().line, "invalid high level declaration")
+				if (this.p().kind == "EXTERN") {
+					this.n()
+					this.parse_def_func(true)
+				} else {
+					this.error(this.p().line, "invalid high level declaration")
+				}
 			}
 		}
 	}
@@ -988,12 +1013,26 @@ const Codegen = class {
 		this.code += text + "\n"
 	}
 
+	type_size(type) {
+		switch (type.kind) {
+		case "POINTER":
+		case "INT":
+		case "FLOAT":
+			return 4
+		case "CHAR":
+			return 1
+		}
+	}
+
 	wat_type(type) {
 		switch (type.kind) {
-		case "POINTER": return "i32"
-		case "ARRAY":   return "i32"
-		case "INT":     return "i32"
-		case "FLOAT":   return "f32"
+		case "POINTER":
+		case "ARRAY":
+		case "INT":
+		case "CHAR":
+			return "i32"
+		case "FLOAT":
+			return "f32"
 		}
 	}
 
@@ -1004,10 +1043,7 @@ const Codegen = class {
 			break
 
 		case "CALL_FUNC":
-			expr.args.forEach((it) => {
-				this.emit_expr(it)
-			})
-
+			expr.args.forEach((it) => { this.emit_expr(it) })
 			this.emit(`call \$${expr.name}`)
 			break
 
@@ -1017,43 +1053,68 @@ const Codegen = class {
 
 		case "EXPR_UN": {
 			let wt = this.wat_type(expr.type)
-
 			if (expr.op === "CAST") {
 				this.emit_expr(expr.oprd)
+				if (expr.type.kind === "POINTER") return
 				if (!this.parser.compare_types(expr.type, expr.oprd.type)) {
 					switch (expr.oprd.type.kind) {
-					case "INT":   this.emit(`${wt}.convert_i32_s`); break
-					case "FLOAT": this.emit(`${wt}.trunc_f32_s`);   break
+						case "INT":   this.emit(`${wt}.convert_i32_s`); break
+						case "FLOAT": this.emit(`${wt}.trunc_f32_s`);   break
 					}
 				}
 				return
 			}
-
 			switch (expr.op) {
-			case "NEG":
+			case "DEREF": {
+				if (expr.type.kind === "CHAR") {
+					this.emit(`${wt}.load8_s`)
+				} else {
+					this.emit(`${wt}.load`)
+				}
+			} break
+			case "NEG": {
 				switch (expr.type.kind) {
-				case "INT":
+				case "INT": {
 					this.emit("i32.const 0")
 					this.emit_expr(expr.oprd)
 					this.emit(`${wt}.sub`)
-					break
-
+				} break
 				case "FLOAT":
 					this.emit_expr(expr.oprd)
 					this.emit(`${wt}.neg`)
-					break
-				} break
-
+				}
+			} break
 			case "NOT":
 				this.emit(`${wt}.eqz`)
-				break
 			}
 		} break
 
 		case "EXPR_BIN": {
 			if (expr.op === "EQ") {
+				let wt = this.wat_type(expr.type)
+				if (expr.lhs.kind !== "VAR") {
+					if (expr.lhs.op === "ARR") {
+						this.emit_expr(expr.lhs.lhs)
+						this.emit_expr(expr.lhs.rhs)
+						this.emit(`${wt}.const ${
+							this.type_size(expr.lhs.lhs.type.base)
+						}`)
+						this.emit(`${wt}.mul`)
+						this.emit(`${wt}.add`)
+					} else if (expr.lhs.op === "DEREF") {
+						this.emit_expr(expr.lhs.oprd)
+					} else this.emit_expr(expr.lhs)
+				}
 				this.emit_expr(expr.rhs)
-				this.emit(`local.set \$${expr.lhs.id}`)
+				if (expr.lhs.kind !== "VAR") {
+					if (expr.type.kind === "CHAR") {
+						this.emit(`${wt}.store8`)
+					} else {
+						this.emit(`${wt}.store`)
+					}
+				} else {
+					this.emit(`local.set \$${expr.lhs.id}`)
+				}
 				return
 			}
 
@@ -1064,42 +1125,54 @@ const Codegen = class {
 			let lt = expr.lhs.type
 
 			switch (expr.op) {
-			case "ADD": this.emit(`${wt}.add`); break
-			case "SUB": this.emit(`${wt}.sub`); break
-			case "MUL": this.emit(`${wt}.mul`); break
-			case "EQ_EQ": this.emit(`${wt}.eq`); break
-			case "NOT_EQ": this.emit(`${wt}.ne`); break
-			case "AND": this.emit(`${wt}.and`); break
-			case "OR": this.emit(`${wt}.or`); break
+			case "ADD":    this.emit(`${wt}.add`); break
+			case "SUB":    this.emit(`${wt}.sub`); break
+			case "MUL":    this.emit(`${wt}.mul`); break
+			case "EQ_EQ":  this.emit(`${wt}.eq`);  break
+			case "NOT_EQ": this.emit(`${wt}.ne`);  break
+			case "AND":    this.emit(`${wt}.and`); break
+			case "OR":     this.emit(`${wt}.or`);  break
+
+			case "ARR":
+				this.emit(`${wt}.const ${
+					this.type_size(expr.lhs.type.base)
+				}`)
+				this.emit(`${wt}.mul`)
+				this.emit(`${wt}.add`)
+				if (expr.type.kind === "CHAR") {
+					this.emit(`${wt}.load8_s`)
+				} else {
+					this.emit(`${wt}.load`)
+				} break
 
 			case "DIV":
 				switch (lt.kind) {
-				case "INT":   this.emit(`i32.div_s`); break
-				case "FLOAT": this.emit(`f32.div`); break
+					case "INT":   this.emit(`i32.div_s`); break
+					case "FLOAT": this.emit(`f32.div`);   break
 				} break
 
 			case "LESS":
 				switch (lt.kind) {
-				case "INT":   this.emit(`i32.lt_s`); break
-				case "FLOAT": this.emit(`f32.lt`); break
+					case "INT":   this.emit(`i32.lt_s`); break
+					case "FLOAT": this.emit(`f32.lt`);   break
 				} break
 
 			case "GREATER":
 				switch (lt.kind) {
-				case "INT":   this.emit(`i32.gt_s`); break
-				case "FLOAT": this.emit(`f32.gt`); break
+					case "INT":   this.emit(`i32.gt_s`); break
+					case "FLOAT": this.emit(`f32.gt`);   break
 				} break
 
 			case "LESS_EQ":
 				switch (lt.kind) {
-				case "INT":   this.emit(`i32.le_s`); break
-				case "FLOAT": this.emit(`f32.le`); break
+					case "INT":   this.emit(`i32.le_s`); break
+					case "FLOAT": this.emit(`f32.le`);   break
 				} break
 
 			case "GREATER_EQ":
 				switch (lt.kind) {
-				case "INT":   this.emit(`i32.ge_s`); break
-				case "FLOAT": this.emit(`f32.ge`); break
+					case "INT":   this.emit(`i32.ge_s`); break
+					case "FLOAT": this.emit(`f32.ge`);   break
 				} break
 			}
 		} break
@@ -1184,10 +1257,10 @@ const Codegen = class {
 		body.forEach((it) => {
 			switch (it.kind) {
 			case "DEF_VAR":  this.emit_def_var_val(it); break
-			case "MUT_VAR":  this.emit_mut_var(it);     break
-			case "ST_IF":    this.emit_st_if(it);       break
-			case "ST_WHILE": this.emit_st_while(it);    break
-			case "RET":      this.emit_func_ret(it);    break
+			case "MUT_VAR":  this.emit_mut_var    (it); break
+			case "ST_IF":    this.emit_st_if      (it); break
+			case "ST_WHILE": this.emit_st_while   (it); break
+			case "RET":      this.emit_func_ret   (it); break
 
 			case "LP_BREAK":
 				this.emit(`br \$WO${this.loop_ind}`)
@@ -1195,7 +1268,6 @@ const Codegen = class {
 
 			case "LP_CONTINUE":
 				this.emit(`br \$WI${this.loop_ind}`)
-				break
 			}
 		})
 
@@ -1210,9 +1282,9 @@ const Codegen = class {
 		})
 
 		switch (func.type.kind) {
-		case "INT":   this.emit("(result i32)"); break
-		case "FLOAT": this.emit("(result f32)"); break
-		case "VOID":  this.emit("(result)");     break
+			case "INT":   this.emit("(result i32)"); break
+			case "FLOAT": this.emit("(result f32)"); break
+			case "VOID":  this.emit("(result)");     break
 		}
 
 		return skip
@@ -1253,9 +1325,11 @@ const Codegen = class {
 			this.emit("))")
 		})
 
+		this.emit("(memory 10)")
+
 		this.parser.prog.body.forEach((it) => {
-			switch (it.kind) {
-			case "DEF_FUNC": this.emit_def_func(it); break
+			if (it.kind === "DEF_FUNC") {
+				this.emit_def_func(it)
 			}
 		})
 
@@ -1269,6 +1343,8 @@ export function compileCToWat(code) {
 
 	let parser = new Parser(lexer)
 	parser.parse()
+
+	console.log(JSON.stringify(parser.prog, null, 4))
 
 	let codegen = new Codegen(parser)
 	codegen.emit_prog()
