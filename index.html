@@ -74,6 +74,7 @@
 			<label>examples:</label>
 			<button id="fibEx">Fibonacci sequence</button>
 			<button id="mandEx">Mandelbrot set</button>
+			<button id="hwEx">Hello, World!</button>
 		</div>
 		<textarea readonly id="console"></textarea>
 
@@ -109,6 +110,12 @@
 					document.getElementById("fname").value = "main"
 					document.getElementById("fargs").value = ""
 					loadExample("mandset.c")
+				})
+
+				document.getElementById("hwEx").addEventListener("click", () => {
+					document.getElementById("fname").value = "main"
+					document.getElementById("fargs").value = ""
+					loadExample("helloworld.c")
 				})
 
 				document.getElementById("compileBtn").addEventListener("click", async () => {
