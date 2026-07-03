@@ -1,6 +1,6 @@
 extern void print_int(int val);
 extern void print_float(float val);
-extern void print_char(int val);
+extern void print_char(char val);
 
 void main() {
   float fromX = -2.0;
