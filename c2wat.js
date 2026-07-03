@@ -98,18 +98,28 @@ const Lexer = class {
 		default:
 			if (this.ch().match(/[0-9]/i)) {
 				let num = ""
-				let is_float = false
+				let flt = false
 
 				while (this.ch().match(/[0-9\.]/i)) {
 					num += this.ch()
 					if (this.ch() === '.')
-						is_float = true
+						flt = true
 					this.count++
 				}
 
 				this.count--
-				if (!is_float) res = this.token("INT", num)
-				else           res = this.token("FLOAT", num)
+				if (!flt) res = this.token("INT", num)
+				else      res = this.token("FLOAT", num)
+			}
+
+			else if (this.ch() === '"') {
+				this.count++
+				let str = ""
+				while (this.ch() !== '"' && str[-1] !== '\\') {
+					str += this.ch()
+					this.count++
+				}
+				res = this.token("STRING", str)
 			}
 
 			else if (this.ch() === "'") {
@@ -120,11 +130,11 @@ const Lexer = class {
 				if (this.ch() === "\\") {
 					this.count++
 					switch (this.ch()) {
-					case 'n':  ch = "\n"; break
-					case 'r':  ch = "\r"; break
-					case '0':  ch = "\0"; break
-					case '\\': ch = "\\"; break
-					default:   err = true
+						case 'n':  ch = "\n"; break
+						case 'r':  ch = "\r"; break
+						case '0':  ch = "\0"; break
+						case '\\': ch = "\\"; break
+						default:   err = true
 					}
 				} else {
 					ch = this.ch()
@@ -365,6 +375,8 @@ const Parser = class {
 		case "NOT":
 		case "CAST":
 			return l ? -1 : 30
+		case "DEREF":
+			return l ? -1 : 35
 		case "ARR":
 			return l ? 40 : 41
 		}
@@ -575,6 +587,8 @@ const Parser = class {
 						nodes[i-1].oprd = nodes[i]
 					} else this.error(nodes[i-1].line, "invalid expression")
 				} else {
+					console.log(lhs, rhs)
+					console.log(nodes)
 					if (nodes[i+1].kind === "EXPR_BIN") {
 						nodes[i+1].lhs = nodes[i]
 					} else if (nodes[i+1].kind === "EXPR_UN") {
@@ -608,6 +622,16 @@ const Parser = class {
 					type: { kind: "CHAR" },
 					lit: "CHAR",
 					value: this.n().data.charCodeAt(0),
+				})
+			} break
+
+			case "STRING": {
+				nodes.push({
+					kind: "LIT",
+					line: this.p().line,
+					type: { kind: "POINTER", base: { kind: "CHAR" } },
+					lit: "STRING",
+					data: this.n().data
 				})
 			} break
 
@@ -915,7 +939,7 @@ const Parser = class {
 		while (this.p().kind !== "CPAR") {
 			if (this.p().kind == "COM") {
 				this.n()
-			} else if (this.p2().kind == "ID") {
+			} else if (this.p().kind == "ID") {
 				let _type = this.parse_type(false).type
 				this.expect(this.p(), "ID")
 				let _name = this.n().data
@@ -1004,6 +1028,8 @@ const Codegen = class {
 		this.loop_ind = 0
 		this.intend = 0
 		this.cur_func = null
+		this.str_lits = new Map(),
+		this.str_lit_mem = 32
 		this.parser = parser
 	}
 
@@ -1039,7 +1065,12 @@ const Codegen = class {
 	emit_expr(expr) {
 		switch (expr.kind) {
 		case "LIT":
-			this.emit(`${this.wat_type(expr.type)}.const ${expr.value}`)
+			if (expr.lit === "STRING") {
+				this.emit(`i32.const ${this.str_lit_mem}`)
+				console.log(this.str_lit_mem, expr.data)
+				this.str_lits.set(this.str_lit_mem, expr.data)
+				this.str_lit_mem += expr.data.length
+			} else this.emit(`${this.wat_type(expr.type)}.const ${expr.value}`)
 			break
 
 		case "CALL_FUNC":
@@ -1066,6 +1097,7 @@ const Codegen = class {
 			}
 			switch (expr.op) {
 			case "DEREF": {
+				this.emit_expr(expr.oprd)
 				if (expr.type.kind === "CHAR") {
 					this.emit(`${wt}.load8_s`)
 				} else {
@@ -1089,7 +1121,7 @@ const Codegen = class {
 			}
 		} break
 
-		case "EXPR_BIN": {
+		case "EXPR_BIN":
 			if (expr.op === "EQ") {
 				let wt = this.wat_type(expr.type)
 				if (expr.lhs.kind !== "VAR") {
@@ -1175,7 +1207,6 @@ const Codegen = class {
 					case "FLOAT": this.emit(`f32.ge`);   break
 				} break
 			}
-		} break
 		}
 	}
 
@@ -1331,6 +1362,11 @@ const Codegen = class {
 			if (it.kind === "DEF_FUNC") {
 				this.emit_def_func(it)
 			}
+		})
+
+		this.str_lits.forEach((val, mem) => {
+			val += "\\00"
+			this.emit(`(data (i32.const ${mem}) "${val}")`)
 		})
 
 		this.intend--

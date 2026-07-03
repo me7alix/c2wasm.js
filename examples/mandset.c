@@ -10,20 +10,8 @@ void main() {
   float stepX = 0.032;
   float stepY = 0.075;
 
-  char *grad = (char*)64;
+  char *grad = " .,:;ilox0#@";
   int grad_len = 12;
-  grad[0]  = ' ';
-  grad[1]  = '.';
-  grad[2]  = ',';
-  grad[3]  = ':';
-  grad[4]  = ';';
-  grad[5]  = 'i';
-  grad[6]  = 'l';
-  grad[7]  = 'o';
-  grad[8]  = 'x';
-  grad[9]  = '0';
-  grad[10] = '#';
-  grad[11] = '@';
 
   float i = fromY; while (i < toY) {
     float j = fromX; while (j < toX) {
