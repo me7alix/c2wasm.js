@@ -439,7 +439,7 @@ const Parser = class {
 				this.n()
 
 			if (!this.compare_types(_expr.type, _fargs[count].type))
-				this.error(_line, "types mismatching")
+				this.error(_line, "types mismatch")
 
 			count++
 		}
@@ -524,7 +524,7 @@ const Parser = class {
 					this.error(expr.line, "invalid operation")
 				}
 			} else if (!this.compare_types(lhst, rhst)) {
-				this.error(expr.line, "types mismatching")
+				this.error(expr.line, "types mismatch")
 			}
 
 			if (expr.op === "ARR") {
@@ -797,7 +797,7 @@ const Parser = class {
 			this.n()
 			_expr = this.expr_num_cast(this.parse_expr(["SEMI"]), _type)
 			if (!this.compare_types(_type, _expr.type))
-				this.error(line, "types mismatching")
+				this.error(line, "types mismatch")
 		} else {
 			this.expect(this.n(), "SEMI")
 		}
@@ -833,7 +833,7 @@ const Parser = class {
 		}
 
 		if (!this.compare_types(this.cur_func.type, _expr.type))
-			this.error(line, "types mismatching")
+			this.error(line, "types mismatch")
 
 		return {
 			kind: "RET",
@@ -858,10 +858,10 @@ const Parser = class {
 
 		if (this.p().kind === "ST_ELSE") {
 			if (this.p2().kind == "ST_IF") {
-				this.n();
+				this.n()
 				st_if.next = this.parse_st_if()
 			} else {
-				this.n();
+				this.n()
 				st_if.next = {
 					kind: "ST_ELSE",
 					body: this.parse_body(false),
@@ -1007,7 +1007,8 @@ const Parser = class {
 		while (this.p().kind != "EOF") {
 			if (this.is_type_next(true)) {
 				this.prog.body.push(this.parse_def_func(false))
-				//this.prog.body.push(this.parse_def_var())
+				// TODO: Global variables
+				// this.prog.body.push(this.parse_def_var())
 			} else {
 				if (this.p().kind == "EXTERN") {
 					this.n()
@@ -1379,8 +1380,6 @@ export function compileCToWat(code) {
 
 	let parser = new Parser(lexer)
 	parser.parse()
-
-	console.log(JSON.stringify(parser.prog, null, 4))
 
 	let codegen = new Codegen(parser)
 	codegen.emit_prog()
