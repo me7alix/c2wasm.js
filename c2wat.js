@@ -497,10 +497,6 @@ const Parser = class {
 				this.error(expr.line, "invalid binary expression")
 			let lhst = this.expr_calc_types(expr.lhs)
 			let rhst = this.expr_calc_types(expr.rhs)
-			console.log(expr.rhs)
-			console.log(expr.lhs)
-			console.log(lhst)
-			console.log(rhst)
 			expr.type = lhst
 
 			if ((lhst.kind === "FLOAT" && rhst.kind === "INT") ||
@@ -578,7 +574,6 @@ const Parser = class {
 				}
 				let rhs = null
 				if (op === "ARR") {
-					console.log("hehe")
 					rhs = this.parse_expr_bp(0, ["CSQBRA"])
 					this.n()
 				} else rhs = this.parse_expr_bp(rbp, until)
@@ -1273,8 +1268,6 @@ export function compileCToWat(code) {
 
 	let parser = new Parser(lexer)
 	parser.parse()
-
-	console.log(JSON.stringify(parser.prog, null, 4))
 
 	let codegen = new Codegen(parser)
 	codegen.emit_prog()
