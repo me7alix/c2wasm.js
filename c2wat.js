@@ -1,3 +1,5 @@
+"use strict";
+
 /* Lexer stage */
 
 const Lexer = class {
@@ -10,10 +12,9 @@ const Lexer = class {
 	ch()  { return this.code[this.count]     + ''; }
 	ch2() { return this.code[this.count + 1] + ''; }
 
-	token(_kind, _data) {
+	token(kind, data) {
 		return {
-			kind: _kind,
-			data: _data,
+			kind, data,
 			line: this.line,
 		}
 	}
@@ -250,10 +251,10 @@ const Parser = class {
 		if (this.symbol_table.at(-1).has(key)) {
 			this.error(line, `redifinition of the symbol \`${key}\``)
 		}
-
 		this.symbol_table.at(-1).set(`${symbol.kind} ${key}`, symbol)
-		if (symbol.kind === "VAR")
+		if (symbol.kind === "VAR") {
 			this.cur_func.vars.push(symbol)
+		}
 	}
 
 	symbol_table_get(line, key) {
@@ -262,7 +263,6 @@ const Parser = class {
 				return this.symbol_table[i].get(key)
 			}
 		}
-
 		this.error(line, `no such symbol \`${key}\``)
 	}
 
@@ -301,8 +301,8 @@ const Parser = class {
 	}
 
 	parse_type(need_name) {
-		let _type = null
-		let _name = null
+		let type = null
+		let name = null
 		let tp = ""
 
 		if (this.p().kind !== "ID")
@@ -317,18 +317,18 @@ const Parser = class {
 		}
 
 		this.n();
-		_type = { kind: tp }
+		type = { kind: tp }
 
 		while (this.p().kind === "STAR") {
 			this.n()
-			_type = {
+			type = {
 				kind: "POINTER",
-				base: _type,
+				base: type,
 			}
 		}
 
 		if (this.p().kind === "ID" && need_name) {
-			_name = this.n().data
+			name = this.n().data
 		}
 
 		while (this.p().kind === "OSQBRA") {
@@ -338,60 +338,60 @@ const Parser = class {
 				this.error(this.p().line, "int literal expected")
 			}
 
-			_type = {
+			type = {
 				kind: "ARRAY",
-				base: _type,
+				base: type,
 				length: expr.value,
 			}
 		}
 
-		return {
-			type: _type,
-			name: _name,
-		}
+		return { type, name }
 	}
 
-	op_precedence(kind, l) {
+	op_bp(kind, r) {
 		switch (kind) {
 		case "EQ":
-			return l ? 1 : 2
-		case "AND":
+			return 1
 		case "OR":
-			return l ? 3 : 4
+			return 2
+		case "AND":
+			return 3
 		case "LESS":
 		case "GREATER":
 		case "LESS_EQ":
 		case "GREATER_EQ":
 		case "NOT_EQ":
 		case "EQ_EQ":
-			return l ? 5 : 6
+			return 5
 		case "ADD":
 		case "SUB":
-			return l ? 10 : 11
+			return 10
 		case "MUL":
 		case "DIV":
-			return l ? 20 : 21
+			return 20
 		case "NEG":
 		case "NOT":
 		case "CAST":
-			return l ? -1 : 30
+			return r ? -1 : 30
 		case "DEREF":
-			return l ? -1 : 35
+			return r ? -1 : 35
 		case "ARR":
-			return l ? 40 : 41
+			return 40
 		}
 	}
 
-	tok_to_un_op(tok) {
+	tok_unary_op(tok) {
 		switch (tok.kind) {
-		case "AMP":   return "REF"
-		case "STAR":  return "DEREF"
-		case "MINUS": return "NEG"
-		case "EXT":   return "NOT"
+			case "AMP":   return "REF"
+			case "STAR":  return "DEREF"
+			case "MINUS": return "NEG"
+			case "EXT":   return "NOT"
+			case "OPAR":  return "CAST"
+			default:      return null
 		}
 	}
 
-	tok_to_bin_op(tok) {
+	tok_bin_op(tok) {
 		switch (tok.kind) {
 			case "PLUS":       return "ADD"
 			case "MINUS":      return "SUB"
@@ -407,6 +407,7 @@ const Parser = class {
 			case "LESS_EQ":    return "LESS_EQ"
 			case "GREATER_EQ": return "GREATER_EQ"
 			case "OSQBRA":     return "ARR"
+			default:           return null
 		}
 	}
 
@@ -415,46 +416,38 @@ const Parser = class {
 
 	parse_func_call() {
 		let count = 0
-		let _name = this.n().data
-		let _args = []
-		let _line = this.p().line
+		let name = this.n().data
+		let args = []
+		let line = this.p().line
 		let smbl = this.symbol_table_get(
 			this.p().line,
-			this.pref_func(_name))
-		let _type = smbl.type
-		let _fargs = smbl.args
+			this.pref_func(name))
+		let type = smbl.type
+		let fargs = smbl.args
 
 		this.expect(this.n(), "OPAR")
 		while (this.p().kind !== "CPAR") {
-			if (count > _fargs.length - 1)
+			if (count > fargs.length - 1)
 				this.error(_line, "too many arguments")
-
-			let _expr = this.expr_num_cast(
+			let expr = this.expr_num_cast(
 				this.parse_expr(["CPAR", "COM"]),
-				_fargs[count].type)
-
-			_args.push(_expr)
+				fargs[count].type)
+			args.push(expr)
 			this.lexer.count--
 			if (this.p().kind === "COM")
 				this.n()
-
-			if (!this.compare_types(_expr.type, _fargs[count].type))
-				this.error(_line, "types mismatch")
-
+			if (!this.compare_types(expr.type, fargs[count].type))
+				this.error(line, "types mismatch")
 			count++
 		}
 
-		if (count < _fargs.length)
-			this.error(_line, "not enough arguments")
-
+		if (count < fargs.length)
+			this.error(line, "not enough arguments")
 		this.n()
 
 		return {
 			kind: "CALL_FUNC",
-			type: _type,
-			name: _name,
-			line: _line,
-			args: _args,
+			type, name, line, args
 		}
 	}
 
@@ -486,7 +479,7 @@ const Parser = class {
 
 		case "EXPR_UN":
 			if (expr.oprd === null) {
-				this.error(expr.line, "invalid expression")
+				this.error(expr.line, "invalid unary expression")
 			}
 
 			if (expr.op === "CAST") {
@@ -500,12 +493,14 @@ const Parser = class {
 			return expr.type
 
 		case "EXPR_BIN":
-			if (expr.lhs === null || expr.rhs === null) {
-				this.error(expr.line, "invalid expression")
-			}
-
+			if (expr.lhs === null || expr.rhs === null)
+				this.error(expr.line, "invalid binary expression")
 			let lhst = this.expr_calc_types(expr.lhs)
 			let rhst = this.expr_calc_types(expr.rhs)
+			console.log(expr.rhs)
+			console.log(expr.lhs)
+			console.log(lhst)
+			console.log(rhst)
 			expr.type = lhst
 
 			if ((lhst.kind === "FLOAT" && rhst.kind === "INT") ||
@@ -524,7 +519,7 @@ const Parser = class {
 					this.error(expr.line, "invalid operation")
 				}
 			} else if (!this.compare_types(lhst, rhst)) {
-				this.error(expr.line, "types mismatch")
+				this.error(expr.line, "4 types mismatch")
 			}
 
 			if (expr.op === "ARR") {
@@ -550,268 +545,188 @@ const Parser = class {
 		}
 	}
 
-	expr_expand(nodes) {
-		let old_size = nodes.length
-
-		for (let i = 0; i < nodes.length; i++) {
-			if (nodes.length == 1) {
-				return nodes[0]
-			}
-
-			let node = nodes[i]
-			let is_op = false;
-
-			if (node.kind == "EXPR_BIN") {
-				if (node.lhs === null || node.rhs === null) is_op = true;
-			} else if (node.kind == "EXPR_UN") {
-				if (node.oprd === null) is_op = true;
-			}
-
-			if (!is_op) {
-				let lhs = -1
-				let rhs = -1
-
-				if (i > 0)
-					lhs = this.op_precedence(nodes[i-1].op, false)
-
-				if (i < nodes.length - 1)
-					rhs = this.op_precedence(nodes[i+1].op, true)
-
-				if (lhs === -1 && rhs === -1)
-					this.error(nodes[i].line, "invalid combination of operators and operands")
-
-				if (lhs > rhs) {
-					if (nodes[i-1].kind === "EXPR_BIN") {
-						nodes[i-1].rhs = nodes[i]
-					} else if (nodes[i-1].kind === "EXPR_UN") {
-						nodes[i-1].oprd = nodes[i]
-					} else this.error(nodes[i-1].line, "invalid expression")
-				} else {
-					console.log(lhs, rhs)
-					console.log(nodes)
-					if (nodes[i+1].kind === "EXPR_BIN") {
-						nodes[i+1].lhs = nodes[i]
-					} else if (nodes[i+1].kind === "EXPR_UN") {
-						nodes[i+1].oprd = nodes[i]
-					} else this.error(nodes[i+1].line, "invalid expression")
+	// 10 * 5 / 3 + 5
+	parse_expr_bp(min_bp, until) {
+		let lhs = this.parse_expr_item()
+		while (true) {
+			if (lhs.kind === "OPERATOR") {
+				let cast_type = lhs.type
+				let op = this.tok_unary_op(lhs.tok)
+				let rbp = this.op_bp(op, false)
+				let oprd = this.parse_expr_bp(rbp, until)
+				lhs = {
+					kind: "EXPR_UN",
+					line: lhs.tok.line,
+					op, oprd,
+					rbp,
 				}
-
-				nodes.splice(i--, 1)
+				if (op === "CAST") {
+					lhs.type = cast_type
+				}
+			} else {
+				if (until.includes(this.p().kind)) break
+				let savedCount = this.lexer.count
+				let opExpr = this.parse_expr_item()
+				if (opExpr.kind !== "OPERATOR")
+					this.error(this.p().line, "operator expected")
+				let op = this.tok_bin_op(opExpr.tok)
+				let lbp = this.op_bp(op, true)
+				let rbp = this.op_bp(op, false)
+				if (lbp <= min_bp) {
+					this.lexer.count = savedCount
+					break
+				}
+				let rhs = null
+				if (op === "ARR") {
+					console.log("hehe")
+					rhs = this.parse_expr_bp(0, ["CSQBRA"])
+					this.n()
+				} else rhs = this.parse_expr_bp(rbp, until)
+				lhs = {
+					kind: "EXPR_BIN",
+					line: opExpr.tok.line,
+					op, lhs, rhs
+				}
 			}
 		}
-
-		if (old_size === nodes.length) {
-			this.error(this.p().line, "invalid expression")
-		}
-
-		return this.expr_expand(nodes)
+		return lhs
 	}
 
 	parse_expr(until) {
-		let nodes = []
-		loop: while (true) {
-			for (let i = 0; i < until.length; i++) {
-				if (until[i] === this.p().kind) break loop
-			}
-
-			switch (this.p().kind) {
-			case "CHAR": {
-				nodes.push({
-					kind: "LIT",
-					line: this.p().line,
-					type: { kind: "CHAR" },
-					lit: "CHAR",
-					value: this.n().data.charCodeAt(0),
-				})
-			} break
-
-			case "STRING": {
-				nodes.push({
-					kind: "LIT",
-					line: this.p().line,
-					type: { kind: "POINTER", base: { kind: "CHAR" } },
-					lit: "STRING",
-					data: this.n().data
-				})
-			} break
-
-			case "INT": {
-				nodes.push({
-					kind: "LIT",
-					line: this.p().line,
-					type: { kind: "INT" },
-					lit: "INT",
-					value: this.n().data,
-				})
-			} break
-
-			case "FLOAT": {
-				nodes.push({
-					kind: "LIT",
-					line: this.p().line,
-					type: { kind: "FLOAT" },
-					lit: "FLOAT",
-					value: this.n().data,
-				})
-			} break
-
-			case "OPAR":
-				this.n()
-				if (this.is_type_next(false)) {
-					let _line = this.p().line
-					let _type = this.parse_type(false).type
-
-					nodes.push({
-						kind: "EXPR_UN",
-						line: _line,
-						op: "CAST",
-						type: _type,
-						oprd: null,
-					})
-
-					this.expect(this.n(), "CPAR")
-				} else {
-					nodes.push(this.parse_expr(["CPAR"]))
-				} break
-
-			case "ID": {
-				if (this.p2().kind != "OPAR") {
-					let smbl = this.symbol_table_get(
-						this.p().line,
-						this.pref_var(this.p().data))
-					nodes.push({
-						kind: "VAR",
-						line: this.p().line,
-						type: smbl.type,
-						id: smbl.id,
-						name: this.n().data
-					})
-				} else {
-					nodes.push(this.parse_func_call())
-				}
-			} break
-
-			case "AND":
-			case "OR":
-			case "EQ":
-			case "EQ_EQ":
-			case "NOT_EQ":
-			case "LESS":
-			case "GREATER":
-			case "LESS_EQ":
-			case "GREATER_EQ":
-			case "SLASH":
-			case "PLUS": {
-				nodes.push({
-					kind: "EXPR_BIN",
-					line: this.p().line,
-					op: this.tok_to_bin_op(this.n()),
-					type: "",
-					lhs: null, rhs: null,
-				})
-			} break
-
-			case "EXT": {
-				nodes.push({
-					kind: "EXPR_UN",
-					line: this.p().line,
-					op: this.tok_to_un_op(this.n()),
-					type: "",
-					oprd: null,
-				})
-			} break
-
-			case "OSQBRA": {
-				nodes.push({
-					kind: "EXPR_BIN",
-					line: this.p().line,
-					op: this.tok_to_bin_op(this.n()),
-					type: "",
-					lhs: null, rhs: null,
-				})
-				nodes.push(this.parse_expr(["CSQBRA"]))
-			} break
-
-
-			case "AMP":
-			case "STAR":
-			case "MINUS": {
-				let op = this.p().kind
-				let is_unary_op = false
-
-				if (nodes.length === 0) {
-					is_unary_op = true
-				} else {
-					if (nodes.at(-1) === "EXPR_UN") {
-						is_unary_op = false
-					} else {
-						let is_bin_op = nodes.at(-1).kind === "EXPR_BIN"
-						if (is_bin_op && nodes.at(-1).lhs !== null && nodes.at(-1).rhs !== null)
-							is_bin_op = false
-						if (is_bin_op) is_unary_op = true
-					}
-				}
-
-				if (is_unary_op) {
-					nodes.push({
-						kind: "EXPR_UN",
-						line: this.p().line,
-						op: this.tok_to_un_op(this.n()),
-						type: "",
-						oprd: null
-					})
-				} else {
-					nodes.push({
-						kind: "EXPR_BIN",
-						line: this.p().line,
-						op: this.tok_to_bin_op(this.n()),
-						type: "",
-						lhs: null, rhs: null,
-					})
-				}
-			} break
-
-			default:
-				this.error(this.p().line,
-					`invalid operator / operand \`${this.p().data}\``)
-			}
-		}
-
+		let expr = this.parse_expr_bp(0, until)
 		this.n()
-		let expr = this.expr_expand(nodes)
 		this.expr_calc_types(expr)
 		return expr
+	}
+
+	parse_expr_item() {
+		switch (this.p().kind) {
+		case "CHAR":
+			return {
+				kind: "LIT",
+				line: this.p().line,
+				type: { kind: "CHAR" },
+				lit: "CHAR",
+				value: this.n().data.charCodeAt(0),
+			}
+
+		case "STRING":
+			return {
+				kind: "LIT",
+				lit: "STRING",
+				line: this.p().line,
+				data: this.n().data,
+				type: {
+					kind: "POINTER",
+					base: { kind: "CHAR" }
+				}
+			}
+
+		case "INT":
+			return {
+				kind: "LIT",
+				lit: "INT",
+				line: this.p().line,
+				type: { kind: "INT" },
+				value: this.n().data,
+			}
+
+		case "FLOAT":
+			return {
+				kind: "LIT",
+				lit: "FLOAT",
+				line: this.p().line,
+				type: { kind: "FLOAT" },
+				value: this.n().data,
+			}
+
+		case "OPAR": {
+			let tok = this.n()
+			if (this.is_type_next(false)) {
+				let line = this.p().line
+				let type = this.parse_type(false).type
+				this.expect(this.n(), "CPAR")
+				return {
+					kind: "OPERATOR",
+					line, type, tok,
+				}
+			} else {
+				let expr = this.parse_expr_bp(0, ["CPAR"])
+				this.n()
+				return expr
+			}
+		} break
+
+		case "ID": {
+			if (this.p2().kind != "OPAR") {
+				let smbl = this.symbol_table_get(
+					this.p().line,
+					this.pref_var(this.p().data))
+				return {
+					kind: "VAR",
+					line: this.p().line,
+					type: smbl.type,
+					id: smbl.id,
+					name: this.n().data
+				}
+			} else {
+				return this.parse_func_call()
+			}
+		} break
+
+		case "OSQBRA":
+		case "AMP":
+		case "STAR":
+		case "MINUS":
+		case "EXT":
+		case "AND":
+		case "OR":
+		case "EQ":
+		case "EQ_EQ":
+		case "NOT_EQ":
+		case "LESS":
+		case "GREATER":
+		case "LESS_EQ":
+		case "GREATER_EQ":
+		case "SLASH":
+		case "PLUS":
+			return {
+				kind: "OPERATOR",
+				line: this.p().line,
+				tok: this.n()
+			}
+
+		default:
+			this.error(
+				this.p().line,
+				`invalid operator / operand \`${this.p().data}\``
+			)
+		}
 	}
 
 	parse_def_var() {
 		let line = this.p().line
 
 		let tan = this.parse_type(true)
-		let _type = tan.type
-		let _name = tan.name
-
-		let _id = `V${this.var_ind++}`
-		let _expr = null
-
+		let type = tan.type
+		let name = tan.name
+		let id = `V${this.var_ind++}`
+		let expr = null
 		if (this.p().kind === "EQ") {
 			this.n()
-			_expr = this.expr_num_cast(this.parse_expr(["SEMI"]), _type)
-			if (!this.compare_types(_type, _expr.type))
-				this.error(line, "types mismatch")
+			expr = this.expr_num_cast(this.parse_expr(["SEMI"]), type)
+			if (!this.compare_types(type, expr.type)) {
+				this.error(line, "1 types mismatch")
+			}
 		} else {
 			this.expect(this.n(), "SEMI")
 		}
-
-		this.symbol_table_add(line, _name, {
-			kind: "VAR", type: _type, id: _id,
+		this.symbol_table_add(line, name, {
+			kind: "VAR", type, id
 		})
-
 		return {
 			kind: "DEF_VAR",
-			type: _type,
-			name: _name,
-			id: _id,
-			expr: _expr,
+			type, name, id, expr,
 		}
 	}
 
@@ -824,21 +739,19 @@ const Parser = class {
 
 	parse_func_ret() {
 		let line = this.n().line
-
-		let _expr = null
+		let expr = null
 		if (this.p().kind !== "SEMI") {
-			_expr = this.expr_num_cast(
+			expr = this.expr_num_cast(
 				this.parse_expr(["SEMI"]),
-				this.cur_func.type)
+				this.cur_func.type
+			)
 		}
-
-		if (!this.compare_types(this.cur_func.type, _expr.type))
-			this.error(line, "types mismatch")
-
+		if (!this.compare_types(this.cur_func.type, expr.type))
+			this.error(line, "2 types mismatch")
 		return {
 			kind: "RET",
-			type: _expr.type,
-			expr: _expr,
+			type: expr.type,
+			expr
 		}
 	}
 
@@ -846,13 +759,12 @@ const Parser = class {
 		this.n()
 
 		this.expect(this.n(), "OPAR")
-		let _cond = this.parse_expr(["CPAR"])
-		let _body = this.parse_body(false)
+		let cond = this.parse_expr(["CPAR"])
+		let body = this.parse_body(false)
 
 		let st_if = {
 			kind: "ST_IF",
-			cond: _cond,
-			body: _body,
+			cond, body,
 			next: null,
 		}
 
@@ -876,76 +788,62 @@ const Parser = class {
 		this.n()
 
 		this.expect(this.n(), "OPAR")
-		let _cond = this.parse_expr(["CPAR"])
-		let _body = this.parse_body(false)
+		let cond = this.parse_expr(["CPAR"])
+		let body = this.parse_body(false)
 
 		return {
 			kind: "ST_WHILE",
-			cond: _cond,
-			body: _body,
+			cond, body,
 		}
 	}
 
 	parse_body(skip_push) {
 		this.expect(this.n(), "OBRA")
 		let body = []
-
-		if (!skip_push)
-			this.push_scope()
+		if (!skip_push) this.push_scope()
 
 		while (this.p().kind !== "CBRA") {
 			if (this.is_type_next(true))
 				body.push(this.parse_def_var())
-
 			else if (this.p().kind === "RET")
 				body.push(this.parse_func_ret())
-
 			else if (this.p().kind == "ST_IF")
 				body.push(this.parse_st_if())
-
 			else if (this.p().kind == "ST_WHILE")
 				body.push(this.parse_st_while())
-
 			else if (this.p().kind == "LP_BREAK") {
 				body.push({kind: "LP_BREAK"})
 				this.n(); this.expect(this.n(), "SEMI")
-			}
-
-			else if (this.p().kind == "LP_CONTINUE") {
+			} else if (this.p().kind == "LP_CONTINUE") {
 				body.push({kind: "LP_CONTINUE"})
 				this.n(); this.expect(this.n(), "SEMI")
-			}
-
-			else body.push(this.parse_mut_var())
+			} else body.push(this.parse_mut_var())
 		}
 
-		if (!skip_push)
-			this.pop_scope()
-
+		if (!skip_push) this.pop_scope()
 		this.n()
-
 		return body
 	}
 
 	parse_def_func(is_extern) {
-		let _type = this.parse_type(false).type
+		let type = this.parse_type(false).type
 
 		this.expect(this.p(), "ID")
-		let _name = this.n().data
+		let name = this.n().data
 
 		this.expect(this.n(), "OPAR")
-		let _args = []
+		let args = []
 
 		while (this.p().kind !== "CPAR") {
 			if (this.p().kind == "COM") {
 				this.n()
 			} else if (this.p().kind == "ID") {
-				let _type = this.parse_type(false).type
+				let type = this.parse_type(false).type
 				this.expect(this.p(), "ID")
-				let _name = this.n().data
-				_args.push({
-					type: _type,
-					name: _name,
+				let name = this.n().data
+				args.push({
+					type: type,
+					name: name,
 					id: `V${this.var_ind++}`
 				})
 			} else {
@@ -957,31 +855,27 @@ const Parser = class {
 
 		let func = {
 			kind: "DEF_FUNC",
-			type: _type,
-			name: _name,
-			args: _args,
+			type, name, args,
 			vars: [],
 		}
 
 		this.cur_func = func
-		this.symbol_table_add(this.p().line, _name, {
+		this.symbol_table_add(this.p().line, name, {
 			kind: "FUNC",
-			type: _type,
-			args: _args,
+			type, args,
 		})
 
 		if (is_extern) {
 			this.externs.push({
-				type: _type,
-				name: _name,
-				args: _args,
+				type: type,
+				name, args,
 			})
 		}
 
 		if (!is_extern) {
 			this.push_scope()
 
-			_args.forEach((arg) => {
+			args.forEach((arg) => {
 				this.symbol_table_add(this.p().line, arg.name, {
 					kind: "VAR",
 					type: arg.type,
@@ -1068,7 +962,6 @@ const Codegen = class {
 		case "LIT":
 			if (expr.lit === "STRING") {
 				this.emit(`i32.const ${this.str_lit_mem}`)
-				console.log(this.str_lit_mem, expr.data)
 				this.str_lits.set(this.str_lit_mem, expr.data)
 				this.str_lit_mem += expr.data.length
 			} else this.emit(`${this.wat_type(expr.type)}.const ${expr.value}`)
@@ -1380,6 +1273,8 @@ export function compileCToWat(code) {
 
 	let parser = new Parser(lexer)
 	parser.parse()
+
+	console.log(JSON.stringify(parser.prog, null, 4))
 
 	let codegen = new Codegen(parser)
 	codegen.emit_prog()
